@@ -1917,3 +1917,35 @@ jkit completion zsh >> ~/.zshrc
 jkit completion fish > ~/.config/fish/completions/jkit.fish
 jkit completion powershell >> $PROFILE
 ```
+
+
+## `jkit job-config`
+
+Read exact Jenkins job XML or submit one bounded replacement. These commands
+require an explicit natural job path; URLs and traversal syntax are rejected.
+
+```sh
+jkit job-config get team/my-app --stdout
+jkit job-config update team/my-app --stdin --json < candidate.xml
+```
+
+GET writes exact UTF-8 XML bytes only after the complete response passes the
+1 MiB limit and XML validation. UPDATE fully reads and validates at most 1 MiB
+from stdin before making any HTTP request. DTDs, custom entities, malformed XML
+and non-UTF-8 input are rejected. BOM, CRLF and non-ASCII content are preserved.
+Neither command writes files. The timeout covers stdin and all HTTP requests;
+it must be positive and at most 120 seconds. `--verbose`, `--format` and
+`--branch` are unsupported for this sensitive byte transport.
+
+All config and crumb redirects are rejected. UPDATE fetches a crumb, then makes
+one POST without retries, including after HTTP 403. Response bodies and XML
+parser details are omitted from errors. Successful UPDATE prints only:
+
+```json
+{"job":"team/my-app","submittedSha256":"<SHA-256 of exact submitted bytes>","accepted":true}
+```
+
+This receipt acknowledges the HTTP request; it does not verify the stored
+configuration. Read back and verify separately. After any uncertain update,
+reconcile current configuration before deciding whether to make another change.
+Raw exports can contain secrets and must be handled as sensitive data.
