@@ -35,8 +35,8 @@ type DiffResult struct {
 	Result1 string              `json:"result1"`
 	Result2 string              `json:"result2"`
 	Params  []ParamDiff         `json:"paramDiffs,omitempty"`
-	Stages  []StageDiff         `json:"stageDiffs,omitempty"`
-	Tests   []TestDiff          `json:"testDiffs,omitempty"`
+	Stages  []jenkins.StageDiff `json:"stageDiffs,omitempty"`
+	Tests   []jenkins.TestDiff  `json:"testDiffs,omitempty"`
 	Commits []api.CommitSummary `json:"newCommits,omitempty"`
 }
 
@@ -45,21 +45,6 @@ type ParamDiff struct {
 	Name string `json:"name"`
 	Old  string `json:"old"`
 	New  string `json:"new"`
-}
-
-// StageDiff records a stage outcome change.
-type StageDiff struct {
-	Name string `json:"name"`
-	Old  string `json:"old"`
-	New  string `json:"new"`
-}
-
-// TestDiff records a test that changed status.
-type TestDiff struct {
-	Suite string `json:"suite"`
-	Test  string `json:"test"`
-	Old   string `json:"old"`
-	New   string `json:"new"`
 }
 
 func runDiff(cmd *cobra.Command, args []string) error {
@@ -121,15 +106,41 @@ func runDiff(cmd *cobra.Command, args []string) error {
 	// Parameter diffs
 	result.Params = diffParams(build1, build2)
 
-	// Stage diffs
-	stages1, _ := client.GetPipelineStages(jobPath, b1)
-	stages2, _ := client.GetPipelineStages(jobPath, b2)
-	result.Stages = diffStages(stages1, stages2)
-
-	// Test diffs
-	report1, _ := client.GetTestReport(jobPath, b1)
-	report2, _ := client.GetTestReport(jobPath, b2)
-	result.Tests = diffTests(report1, report2)
+	// A comparison must not turn unavailable data into an empty difference.
+	stages1, err := client.GetPipelineStages(jobPath, b1)
+	if err != nil {
+		return fmt.Errorf("getting stages for build #%d: %w", b1, err)
+	}
+	stages2, err := client.GetPipelineStages(jobPath, b2)
+	if err != nil {
+		return fmt.Errorf("getting stages for build #%d: %w", b2, err)
+	}
+	for i, stages := range [][]jenkins.Stage{stages1, stages2} {
+		if stages == nil {
+			return &jenkins.NotFoundError{Resource: "pipeline stages", Name: fmt.Sprintf("build #%d", []int{b1, b2}[i]), Host: client.Host()}
+		}
+	}
+	result.Stages, err = jenkins.CompareStages(stages1, stages2)
+	if err != nil {
+		return fmt.Errorf("comparing stages: %w", err)
+	}
+	report1, err := client.GetTestReport(jobPath, b1)
+	if err != nil {
+		return fmt.Errorf("getting test report for build #%d: %w", b1, err)
+	}
+	report2, err := client.GetTestReport(jobPath, b2)
+	if err != nil {
+		return fmt.Errorf("getting test report for build #%d: %w", b2, err)
+	}
+	for i, report := range []*jenkins.TestReport{report1, report2} {
+		if report == nil {
+			return &jenkins.NotFoundError{Resource: "test report", Name: fmt.Sprintf("build #%d", []int{b1, b2}[i]), Host: client.Host()}
+		}
+	}
+	result.Tests, err = jenkins.CompareTests(report1, report2)
+	if err != nil {
+		return fmt.Errorf("comparing tests: %w", err)
+	}
 
 	// New commits in build2
 	for _, cs := range build2.ChangeSets {
@@ -195,51 +206,6 @@ func diffParams(b1, b2 *jenkins.Build) []ParamDiff {
 	return diffs
 }
 
-func diffStages(s1, s2 []jenkins.Stage) []StageDiff {
-	m1 := make(map[string]string)
-	for _, s := range s1 {
-		m1[s.Name] = s.Status
-	}
-
-	var diffs []StageDiff
-	for _, s := range s2 {
-		old := m1[s.Name]
-		if old != s.Status {
-			diffs = append(diffs, StageDiff{Name: s.Name, Old: old, New: s.Status})
-		}
-	}
-	return diffs
-}
-
-func diffTests(r1, r2 *jenkins.TestReport) []TestDiff {
-	if r1 == nil || r2 == nil {
-		return nil
-	}
-
-	// Build map of test → status for report1
-	type testKey struct{ suite, name string }
-	m1 := make(map[testKey]string)
-	for _, s := range r1.Suites {
-		for _, c := range s.Cases {
-			m1[testKey{s.Name, c.Name}] = c.Status
-		}
-	}
-
-	var diffs []TestDiff
-	for _, s := range r2.Suites {
-		for _, c := range s.Cases {
-			old := m1[testKey{s.Name, c.Name}]
-			if old != c.Status && (c.Status == "FAILED" || c.Status == "REGRESSION") {
-				diffs = append(diffs, TestDiff{
-					Suite: s.Name, Test: c.Name,
-					Old: old, New: c.Status,
-				})
-			}
-		}
-	}
-	return diffs
-}
-
 func parseIntArg(s string) (int, error) {
 	var n int
 	_, err := fmt.Sscanf(s, "%d", &n)
@@ -265,18 +231,18 @@ func printDiff(r *DiffResult) {
 			if old == "" {
 				old = "(new)"
 			}
-			_, _ = fmt.Fprintf(os.Stdout, "  %s: %s → %s\n", s.Name, old, output.ColorStatus(s.New))
+			_, _ = fmt.Fprintf(os.Stdout, "  %s: %s → %s\n", s.Path, old, output.ColorStatus(s.New))
 		}
 	}
 
 	if len(r.Tests) > 0 {
-		_, _ = fmt.Fprintln(os.Stdout, "\nNew Test Failures:")
+		_, _ = fmt.Fprintln(os.Stdout, "\nTest Changes:")
 		for _, t := range r.Tests {
 			old := t.Old
 			if old == "" {
 				old = "(new)"
 			}
-			_, _ = fmt.Fprintf(os.Stdout, "  %s > %s: %s → %s\n", t.Suite, t.Test, old, t.New)
+			_, _ = fmt.Fprintf(os.Stdout, "  %s > %s.%s: %s → %s\n", t.Suite, t.ClassName, t.Test, old, t.New)
 		}
 	}
 

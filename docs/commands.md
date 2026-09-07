@@ -1303,6 +1303,19 @@ jkit test [job] [build#] [--failed] [--new-failures]
 
 Defaults to the latest build. Displays test cases with class, name, status, and duration. Failed tests include error details. Summary shows pass/fail/skip counts.
 
+Filters apply equally to text, JSON, and templates. `--failed` selects only
+`FAILED` and `REGRESSION`; `PASSED`, `FIXED`, and `SKIPPED` are excluded.
+JSON retains the report object and filters its `suites[].cases`; empty selected
+suites are omitted. Counts and duration always describe the full report.
+`--new-failures` compares suite, class, and case name with build N-1. Missing or
+inaccessible current/baseline reports and ambiguous case identities are errors;
+it never substitutes all failures for a missing baseline.
+
+Without `--new-failures`, an absent report produces JSON `null`, a nil template
+value (use `{{if .}}...{{else}}...{{end}}`), or a text notice on stderr. This is
+different from a present report containing zero tests. HTTP/authentication and
+decoding errors still exit nonzero.
+
 ```bash
 jkit test my-app                   # all test results
 jkit test my-app 42                # specific build
@@ -1612,6 +1625,19 @@ jkit diff [job] [build1] [build2]
 ```
 
 Shows differences in parameters, stage outcomes, test results, and commits between two builds.
+
+A comparison requires stage data and test reports for both builds. Unavailable,
+inaccessible, or malformed reads exit nonzero without a diff payload; empty
+available arrays/reports are valid. Jobs without these reports cannot use this
+strict comparison: inspect their parameters and changes separately.
+
+Stages match by qualified path, with `path` added to each stage change. Tests
+match by suite, class, and case name, with `className` added to each test change.
+Ambiguous identities are errors. Changes include additions, recoveries, and
+removals (`new: "(removed)"`); additions have `old: ""`.
+`newCommits` retains the newer build's change sets, not a complete SCM set
+difference. A successful diff is an observation, not proof of build completion
+or source equivalence; check `building` separately before acting on results.
 
 - Two build numbers: compares them directly
 - One build number: compares with the previous build

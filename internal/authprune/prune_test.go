@@ -89,11 +89,11 @@ func TestOtherUsersKeyKept(t *testing.T) {
 	})
 	t.Run("twin authenticates as someone else", func(t *testing.T) {
 		p, _ := decide(
-			key{host: h, result: authcheck.ResultValid, user: "admin@corp", identity: "admin"},
-			key{host: h + "#", result: authcheck.ResultInvalid, user: "admin@corp"},
+			key{host: h, result: authcheck.ResultValid, user: "admin@example", identity: "admin"},
+			key{host: h + "#", result: authcheck.ResultInvalid, user: "admin@example"},
 		)
 		assert.Empty(t, p.Removals)
-		assert.Equal(t, []Report{{Host: h + "#", Reason: "twin " + h + " authenticates as 'admin', configured user is 'admin@corp'",
+		assert.Equal(t, []Report{{Host: h + "#", Reason: "twin " + h + " authenticates as 'admin', configured user is 'admin@example'",
 			Suggestion: "jkit auth login --host " + h + " --user 'admin'"}}, p.Reports)
 	})
 	t.Run("user case ignored", func(t *testing.T) {

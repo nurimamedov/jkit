@@ -24,9 +24,9 @@ func (c *Client) GetTestReport(jobPath string, number int) (*jenkins.TestReport,
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	var report jenkins.TestReport
+	var report *jenkins.TestReport
 	if err := json.NewDecoder(resp.Body).Decode(&report); err != nil {
 		return nil, fmt.Errorf("decoding test report: %w", err)
 	}
-	return &report, nil
+	return report, nil
 }

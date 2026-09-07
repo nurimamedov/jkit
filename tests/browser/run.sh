@@ -22,7 +22,7 @@ fi
 
 if ! grep -qs '"version": "1.50.0"' "$here/node_modules/playwright/package.json"; then
   echo "installing node modules into tests/browser/node_modules" >&2
-  # The only step that needs the network; proxy settings pass through for corporate networks.
+  # The only step that needs the network; proxy settings pass through for restricted networks.
   docker run --rm -u "$user" -e HOME=/tmp \
     -e HTTPS_PROXY -e HTTP_PROXY -e NO_PROXY -e https_proxy -e http_proxy -e no_proxy \
     -v "$here:/suite" -w /suite "$image" npm ci --no-audit --no-fund >&2

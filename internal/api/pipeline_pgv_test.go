@@ -13,6 +13,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestEmptyPGVStagesRemainAvailable(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"status":"ok","data":{"complete":true,"stages":[]}}`))
+	}))
+	defer srv.Close()
+	stages, err := NewClient(srv.URL, "local", "local").GetPipelineStages("demo", 42)
+	require.NoError(t, err)
+	assert.NotNil(t, stages, "an available empty pipeline must differ from unavailable stages")
+	assert.Empty(t, stages)
+}
+
 func pgvTreeHandler(t *testing.T) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/stages/tree") {

@@ -48,62 +48,50 @@ func runTest(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if report == nil {
-		_, _ = fmt.Fprintf(os.Stderr, "No test results for build #%d\n", buildNum)
-		return nil
-	}
-
 	isJSON, _ := cmd.Flags().GetBool("json")
 	tmpl, _ := cmd.Flags().GetString("format")
 	f := output.NewFormatter(os.Stdout, isJSON, tmpl)
 	failedOnly, _ := cmd.Flags().GetBool("failed")
 	newFailures, _ := cmd.Flags().GetBool("new-failures")
-
-	// Build previous build's test status map for --new-failures
-	var prevStatus map[string]string
-	if newFailures {
-		prevReport, _ := client.GetTestReport(jobPath, buildNum-1)
-		if prevReport == nil {
-			_, _ = fmt.Fprintln(os.Stderr, "warning: no test report for previous build — showing all failures")
-			failedOnly = true
-			newFailures = false
-		} else {
-			prevStatus = make(map[string]string)
-			for _, s := range prevReport.Suites {
-				for _, c := range s.Cases {
-					prevStatus[c.ClassName+"."+c.Name] = c.Status
-				}
-			}
+	if report == nil {
+		if newFailures {
+			return &jenkins.NotFoundError{Resource: "test report", Name: fmt.Sprintf("build #%d", buildNum), Host: client.Host()}
 		}
+		if isJSON || tmpl != "" {
+			return f.Output(report, nil)
+		}
+		_, _ = fmt.Fprintf(os.Stderr, "No test results for build #%d\n", buildNum)
+		return nil
 	}
 
+	var previous *jenkins.TestReport
+	if newFailures {
+		if buildNum <= 1 {
+			return fmt.Errorf("no previous build for #%d", buildNum)
+		}
+		previous, err = client.GetTestReport(jobPath, buildNum-1)
+		if err != nil {
+			return fmt.Errorf("getting baseline report for build #%d: %w", buildNum-1, err)
+		}
+		if previous == nil {
+			return &jenkins.NotFoundError{Resource: "baseline test report", Name: fmt.Sprintf("build #%d", buildNum-1), Host: client.Host()}
+		}
+	}
+	report, err = jenkins.FilterTestReport(report, failedOnly, previous)
+	if err != nil {
+		return err
+	}
 	if isJSON || tmpl != "" {
 		return f.Output(report, nil)
 	}
 
-	// Flatten cases
 	var cases []jenkins.TestCase
 	for _, suite := range report.Suites {
-		for _, tc := range suite.Cases {
-			if failedOnly && tc.Status == "PASSED" {
-				continue
-			}
-			if newFailures {
-				// Only show failures that were passing (or new) in previous build
-				if tc.Status == "PASSED" {
-					continue
-				}
-				prev, existed := prevStatus[tc.ClassName+"."+tc.Name]
-				if existed && prev != "PASSED" {
-					continue // was already failing — skip
-				}
-			}
-			cases = append(cases, tc)
-		}
+		cases = append(cases, suite.Cases...)
 	}
 
 	if len(cases) == 0 {
-		if failedOnly {
+		if failedOnly || newFailures {
 			_, _ = fmt.Fprintln(os.Stderr, "No failed tests")
 		} else {
 			_, _ = fmt.Fprintln(os.Stderr, "No test cases found")

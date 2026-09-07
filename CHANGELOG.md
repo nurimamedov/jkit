@@ -47,6 +47,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   another host, another port or from https to http gets none. A redirect from
   http to https on the default ports keeps them.
 
+### Read correctness patch (0.6.0-ext.1)
+- Apply test filters consistently to JSON, templates, and text; retain full-report totals.
+- Preserve absent reports as JSON null and reject unavailable or ambiguous regression baselines.
+- Fail build comparisons when stage or test reads fail or required reports are absent.
+- Compare qualified stage paths and suite/class/case identities, including recoveries and removals.
+
 ### Fixed
 - A pasted URL under a Jenkins context path (`https://x/jenkins/job/a/12/`)
   uses the configured host with that path, its credentials and routes.
