@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -70,6 +71,9 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	for i := range builds {
+		output.MaskBuildParameters(&builds[i])
+	}
 
 	if isJSON || tmpl != "" {
 		infos := make([]buildInfo, len(builds))
@@ -130,9 +134,28 @@ func showBuildDetail(client *api.Client, f *output.Formatter, jobPath string, nu
 		}
 		return nil
 	}
+	redact := output.ParameterRedactor(build).Replace
+	output.MaskBuildParameters(build)
 
 	if isJSON || tmpl != "" {
 		return f.Output(newBuildInfo(*build, clock()), nil)
+	}
+
+	// Fetch optional stages before rendering; malformed graphs must not emit
+	// a partial successful build summary.
+	stages, stageErr := client.GetPipelineStages(jobPath, num)
+	if errors.Is(stageErr, jenkins.ErrInvalidStageGraph) {
+		return stageErr
+	}
+	if stageErr != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "warning: could not fetch stages: %s\n", stageErr)
+	}
+	for i := range stages {
+		stages[i].Name = redact(stages[i].Name)
+	}
+	tree, err := jenkins.BuildStageTree(stages)
+	if err != nil {
+		return err
 	}
 
 	result := build.Result
@@ -164,14 +187,8 @@ func showBuildDetail(client *api.Client, f *output.Formatter, jobPath string, nu
 		}
 	}
 
-	// Try to show stages
-	stages, stageErr := client.GetPipelineStages(jobPath, num)
-	if stageErr != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "warning: could not fetch stages: %s\n", stageErr)
-	}
-	if len(stages) > 0 {
+	if len(tree) > 0 {
 		_, _ = fmt.Fprintln(os.Stdout, "\nStages:")
-		tree := jenkins.BuildStageTree(stages)
 		maxName, maxStatus := 0, 0
 		for _, s := range tree {
 			w := len(s.Name) + s.Depth*2

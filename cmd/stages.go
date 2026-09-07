@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/spf13/cobra"
 
 	"github.com/ysmaoui/jkit/internal/jenkins"
@@ -115,7 +116,10 @@ func runStages(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	paths := jenkins.QualifiedStagePaths(stages)
+	paths, err := jenkins.QualifiedStagePaths(stages)
+	if err != nil {
+		return err
+	}
 	infos := make([]stageInfo, len(stages))
 	now := clock()
 	for i, s := range stages {
@@ -172,6 +176,33 @@ func runStages(cmd *cobra.Command, args []string) error {
 		}},
 	}
 
+	// The table pads every row to each column's widest rendered value. Bound
+	// that expansion before output, including headers, separators, and ANSI or
+	// Unicode bytes that do not contribute to the formatter's visible width.
+	rows := len(items) + 1
+	remaining := jenkins.MaxStageGraphExpansionBytes - rows*(2*(len(columns)-1)+1)
+	expansionErr := fmt.Errorf("%w: stages table exceeds client expansion limit of %d bytes", jenkins.ErrInvalidStageGraph, jenkins.MaxStageGraphExpansionBytes)
+	if remaining < 0 {
+		return expansionErr
+	}
+	for _, column := range columns {
+		maxWidth := ansi.StringWidth(column.Header)
+		remaining -= len(column.Header) - maxWidth
+		for _, item := range items {
+			value := column.Field(item)
+			width := ansi.StringWidth(value)
+			overhead := len(value) - width
+			if overhead > remaining {
+				return expansionErr
+			}
+			remaining -= overhead
+			maxWidth = max(maxWidth, width)
+		}
+		if maxWidth > remaining/rows {
+			return expansionErr
+		}
+		remaining -= maxWidth * rows
+	}
 	return f.Output(items, columns)
 }
 

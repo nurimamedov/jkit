@@ -38,6 +38,7 @@ type authHost struct {
 func writeAuthConfig(t *testing.T, hosts ...authHost) {
 	t.Helper()
 	dir := t.TempDir()
+	require.NoError(t, os.Chmod(dir, 0700))
 	t.Setenv("JKIT_CONFIG_DIR", dir)
 	var b strings.Builder
 	b.WriteString("hosts:\n")

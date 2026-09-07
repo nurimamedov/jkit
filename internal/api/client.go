@@ -12,6 +12,7 @@ import (
 	"net/http/cookiejar"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -61,48 +62,57 @@ type Client struct {
 }
 
 type authTransport struct {
-	base  http.RoundTripper
-	user  string
-	token string
-	// home is the configured host URL. The transport sees every redirect hop,
-	// so credentials go only to requests that sendsCredentials accepts.
-	home *url.URL
+	base   http.RoundTripper
+	user   string
+	token  string
+	origin httpOrigin
 }
 
-// sendsCredentials reports whether u is the configured host: same hostname
-// ignoring case, same port after defaulting by scheme, and never a downgrade
-// from https to http. An http host may be upgraded to https on default ports,
-// as Jenkins behind a TLS-terminating proxy redirects.
-func (t *authTransport) sendsCredentials(u *url.URL) bool {
-	if t.home == nil || !strings.EqualFold(u.Hostname(), t.home.Hostname()) {
-		return false
-	}
-	if t.home.Scheme == "https" && u.Scheme != "https" {
-		return false
-	}
-	port, homePort := effectivePort(u), effectivePort(t.home)
-	if port == homePort {
-		return true
-	}
-	return t.home.Scheme == "http" && homePort == "80" && u.Scheme == "https" && port == "443"
+var errOriginBoundary = errors.New("request origin is outside the configured Jenkins origin")
+var errRedirectLimit = errors.New("stopped after 10 redirects")
+
+type httpOrigin struct {
+	scheme string
+	host   string
+	port   int
 }
 
-func effectivePort(u *url.URL) string {
-	if p := u.Port(); p != "" {
-		return p
+// Invalid origins remain empty and cannot authorize a request.
+func originForURL(u *url.URL) httpOrigin {
+	if u == nil || u.User != nil || u.Opaque != "" || u.Hostname() == "" {
+		return httpOrigin{}
 	}
-	switch u.Scheme {
-	case "http":
-		return "80"
-	case "https":
-		return "443"
+	scheme := strings.ToLower(u.Scheme)
+	port := 80
+	if scheme == "https" {
+		port = 443
+	} else if scheme != "http" {
+		return httpOrigin{}
 	}
-	return ""
+	if rawPort := u.Port(); rawPort != "" {
+		var err error
+		port, err = strconv.Atoi(rawPort)
+		if err != nil || port < 1 || port > 65535 {
+			return httpOrigin{}
+		}
+	}
+	host := u.Hostname()
+	if zone := strings.LastIndexByte(host, '%'); zone >= 0 {
+		// DNS names and IPv6 hex are case-insensitive; interface zones are not.
+		host = strings.ToLower(host[:zone]) + host[zone:]
+	} else {
+		host = strings.ToLower(host)
+	}
+	return httpOrigin{scheme: scheme, host: host, port: port}
+}
+
+func (origin httpOrigin) allows(u *url.URL) bool {
+	return origin.host != "" && origin == originForURL(u)
 }
 
 func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	if !t.sendsCredentials(req.URL) {
-		return t.base.RoundTrip(req)
+	if !t.origin.allows(req.URL) {
+		return nil, errOriginBoundary
 	}
 	req = req.Clone(req.Context())
 	cred := base64.StdEncoding.EncodeToString([]byte(t.user + ":" + t.token))
@@ -188,15 +198,25 @@ func newBaseTransport() *http.Transport {
 
 func NewClient(host, user, token string, opts ...ClientOption) *Client {
 	host = strings.TrimRight(host, "/")
-	home, _ := url.Parse(host)
+	parsedHost, _ := url.Parse(host)
+	origin := originForURL(parsedHost)
 	jar, _ := cookiejar.New(nil)
 	c := &Client{
 		httpClient: &http.Client{
 			Transport: &authTransport{
-				base:  newBaseTransport(),
-				user:  user,
-				token: token,
-				home:  home,
+				base:   newBaseTransport(),
+				user:   user,
+				token:  token,
+				origin: origin,
+			},
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				if !origin.allows(req.URL) {
+					return errOriginBoundary
+				}
+				if len(via) >= 10 {
+					return errRedirectLimit
+				}
+				return nil
 			},
 			Jar:     jar,
 			Timeout: 30 * time.Second,
@@ -337,6 +357,9 @@ func (c *Client) sendWith(ctx context.Context, hc *http.Client, method, rawURL s
 		if err != nil {
 			if ctx.Err() != nil {
 				return nil, ctx.Err()
+			}
+			if errors.Is(err, errOriginBoundary) || errors.Is(err, errRedirectLimit) {
+				return nil, err
 			}
 			if attempt < maxRetries {
 				if err := sleepCtx(ctx, backoff(attempt)); err != nil {

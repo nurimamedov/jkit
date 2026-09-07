@@ -11,6 +11,7 @@ import (
 
 func TestLoadEmptyDir(t *testing.T) {
 	dir := t.TempDir()
+	require.NoError(t, os.Chmod(dir, 0700))
 	t.Setenv("JKIT_CONFIG_DIR", dir)
 	cfg, err := Load()
 	require.NoError(t, err)
@@ -20,6 +21,7 @@ func TestLoadEmptyDir(t *testing.T) {
 
 func TestSaveAndReload(t *testing.T) {
 	dir := t.TempDir()
+	require.NoError(t, os.Chmod(dir, 0700))
 	t.Setenv("JKIT_CONFIG_DIR", dir)
 
 	cfg := &Config{
@@ -38,6 +40,7 @@ func TestSaveAndReload(t *testing.T) {
 
 func TestFilePermissions(t *testing.T) {
 	dir := t.TempDir()
+	require.NoError(t, os.Chmod(dir, 0700))
 	t.Setenv("JKIT_CONFIG_DIR", dir)
 
 	cfg := &Config{Hosts: map[string]*HostConfig{
@@ -140,6 +143,7 @@ func TestXDGConfigPath(t *testing.T) {
 
 func TestReplaceWithBackup(t *testing.T) {
 	dir := t.TempDir()
+	require.NoError(t, os.Chmod(dir, 0700))
 	t.Setenv("JKIT_CONFIG_DIR", dir)
 	path := filepath.Join(dir, "config.yml")
 	orig := []byte("hosts:\n  https://ci.example.com:\n    user: u\n    token: t\n")
@@ -169,6 +173,7 @@ func TestReplaceWithBackup(t *testing.T) {
 
 func TestReplaceWithBackupRefusesChangedFile(t *testing.T) {
 	dir := t.TempDir()
+	require.NoError(t, os.Chmod(dir, 0700))
 	t.Setenv("JKIT_CONFIG_DIR", dir)
 	path := filepath.Join(dir, "config.yml")
 	require.NoError(t, os.WriteFile(path, []byte("hosts: {}\n"), 0600))
@@ -180,40 +185,27 @@ func TestReplaceWithBackupRefusesChangedFile(t *testing.T) {
 	assert.NoFileExists(t, path+".bak")
 }
 
-func TestReplaceWithBackupKeepsSymlink(t *testing.T) {
+func TestReplaceWithBackupRejectsSymlink(t *testing.T) {
 	dir, realDir := t.TempDir(), t.TempDir()
+	require.NoError(t, os.Chmod(dir, 0700))
 	t.Setenv("JKIT_CONFIG_DIR", dir)
 	path := filepath.Join(dir, "config.yml")
 	target := filepath.Join(realDir, "jkit.yml")
 	orig := []byte("hosts: {}\n")
-	require.NoError(t, os.WriteFile(target, orig, 0644))
+	require.NoError(t, os.WriteFile(target, orig, 0600))
 	require.NoError(t, os.Symlink(target, path))
-
-	cfg := &Config{Hosts: map[string]*HostConfig{"https://ci.example.com": {User: "u", Token: "t"}}}
-	backup, err := cfg.ReplaceWithBackup(orig)
-	require.NoError(t, err)
-
-	link, err := os.Readlink(path)
-	require.NoError(t, err)
-	assert.Equal(t, target, link)
-	loaded, err := Load()
-	require.NoError(t, err)
-	assert.Contains(t, loaded.Hosts, "https://ci.example.com")
-	info, err := os.Stat(target)
-	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(0600), info.Mode().Perm())
-	assert.Equal(t, path+".bak", backup)
-	got, err := os.ReadFile(backup)
+	_, err := (&Config{Hosts: map[string]*HostConfig{}}).ReplaceWithBackup(orig)
+	require.Error(t, err)
+	got, err := os.ReadFile(target)
 	require.NoError(t, err)
 	assert.Equal(t, orig, got)
-	entries, err := os.ReadDir(realDir)
-	require.NoError(t, err)
-	assert.Len(t, entries, 1, "no temp files left next to the target")
+	assert.NoFileExists(t, path+".bak")
 }
 
 func TestReplaceWithBackupErrorsHideContent(t *testing.T) {
 	const secret = "tok-5e1f-never-print"
 	dir := t.TempDir()
+	require.NoError(t, os.Chmod(dir, 0700))
 	t.Setenv("JKIT_CONFIG_DIR", dir)
 	path := filepath.Join(dir, "config.yml")
 	require.NoError(t, os.WriteFile(path, []byte("hosts:\n  https://ci.example.com:\n    token: "+secret+"\n"), 0600))

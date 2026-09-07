@@ -245,7 +245,7 @@ func TestSendsCredentials(t *testing.T) {
 		{"explicit 443 in config", "https://ci.example.com:443", "https://ci.example.com/api/json", true},
 		{"explicit 443 in target", "https://ci.example.com", "https://ci.example.com:443/api/json", true},
 		{"hostname case", "https://CI.Example.com", "https://ci.example.com/api/json", true},
-		{"http upgraded to https", "http://ci.example.com", "https://ci.example.com/api/json", true},
+		{"http upgraded to https", "http://ci.example.com", "https://ci.example.com/api/json", false},
 		{"https downgraded to http", "https://ci.example.com", "http://ci.example.com/api/json", false},
 		{"other host", "https://ci.example.com", "https://other.example.com/api/json", false},
 		{"other port", "https://ci.example.com", "https://ci.example.com:8443/api/json", false},
@@ -257,7 +257,7 @@ func TestSendsCredentials(t *testing.T) {
 			require.NoError(t, err)
 			target, err := url.Parse(tc.target)
 			require.NoError(t, err)
-			assert.Equal(t, tc.want, (&authTransport{home: home}).sendsCredentials(target))
+			assert.Equal(t, tc.want, originForURL(home).allows(target))
 		})
 	}
 }
@@ -279,8 +279,8 @@ func TestCredentialsNotSentAcrossHostRedirect(t *testing.T) {
 	defer home.Close()
 
 	resp, err := NewClient(home.URL, "jane", "tok").Get("/api/json", nil)
-	require.NoError(t, err)
-	CloseBody(resp)
+	require.ErrorIs(t, err, errOriginBoundary)
+	assert.Nil(t, resp)
 	assert.True(t, homeAuth.Load(), "configured host gets credentials")
 	assert.False(t, sawAuth.Load(), "redirect target must not get credentials")
 }

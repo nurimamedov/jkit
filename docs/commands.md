@@ -2,6 +2,12 @@
 
 ## Global Flags
 
+Authenticated requests stay on the configured HTTP(S) origin (scheme, hostname,
+and effective port). Same-origin redirects work; redirects to another origin or
+from HTTPS to HTTP fail before contacting that destination. Configure the final
+Jenkins URL directly if a proxy redirects to a different origin. External
+artifact redirects are also rejected.
+
 All commands support these flags:
 
 | Flag | Description |
@@ -282,6 +288,11 @@ jkit search api --json             # JSON output
 ---
 
 ## `jkit status`
+
+Secret-named build parameter values are masked before text, JSON, and template
+rendering, including recent-build lists. Nonsecret parameter types are preserved.
+This uses the same name heuristic as `env`; it cannot identify every secret
+under an arbitrary name or sanitize arbitrary log/commit text.
 
 Show build status.
 
@@ -1025,6 +1036,13 @@ jkit log my-app 42 --slowest 10                  # the 10 longest waits in the b
 
 ## `jkit stages`
 
+Malformed stage graphs (including parent cycles or duplicate/missing IDs) fail
+explicitly. The client accepts at most 10,000 stage nodes as a defensive limit;
+this is not a Jenkins capacity limit. Qualified path/prefix expansion and padded
+stage-name output also have defensive 8 MiB budgets. The text stages table is
+limited to 8 MiB across all padded columns. Stage-name logs, comparisons, text
+status, and failed-build diagnosis also reject malformed graph data.
+
 List the pipeline stages of a build with their node IDs and qualified paths.
 
 ```
@@ -1340,6 +1358,12 @@ jkit artifacts [job] [build#] [-d FILENAME] [-o PATH]
 
 Defaults to the latest build. Without `-d`, lists artifacts as a table.
 
+Downloads use a private temporary file and replace a regular destination only
+after the transfer, sync, and close succeed. Existing or dangling destination
+symlinks and other nonregular destinations are rejected. A failed transfer
+preserves the previous destination and removes its temporary file. New files
+have mode 0600.
+
 ```bash
 jkit artifacts my-app 42                          # list artifacts
 jkit artifacts my-app 42 -d report.xml            # download to ./report.xml
@@ -1617,6 +1641,15 @@ The export runs inside the build, so the exporting step and the `post` block alw
 ---
 
 ## `jkit diff`
+
+Changed secret-named parameter values are masked in text, JSON, and templates.
+Changes are detected before masking, so changed or removed secrets still appear
+as changes. This uses the same name heuristic as `env`.
+
+Known secret parameter values are also masked when copied into presented commit
+text, stage/test names, or other changed parameter values. Status similarly masks
+copies in causes, commit text, stage names, and parameter string values. Arbitrary secrets
+not identified by a named parameter remain outside this masking guarantee.
 
 Compare two builds of the same job.
 

@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 
@@ -118,15 +117,9 @@ func downloadArtifact(client *api.Client, jobPath string, buildNum int, name, ou
 		outputPath = filepath.Base(match.FileName)
 	}
 
-	f, err := os.Create(outputPath)
+	n, err := output.SaveArtifact(outputPath, body)
 	if err != nil {
-		return fmt.Errorf("creating file: %w", err)
-	}
-	defer func() { _ = f.Close() }()
-
-	n, err := io.Copy(f, body)
-	if err != nil {
-		return fmt.Errorf("writing artifact: %w", err)
+		return err
 	}
 
 	_, _ = fmt.Fprintf(os.Stderr, "Downloaded %s (%d bytes)\n", outputPath, n)

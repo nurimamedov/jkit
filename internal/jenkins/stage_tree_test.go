@@ -1,6 +1,8 @@
 package jenkins
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -76,7 +78,8 @@ func TestQualifiedStagePaths_Flat(t *testing.T) {
 		{ID: "2", Name: "Test", FirstParent: "1"},
 		{ID: "3", Name: "Deploy", FirstParent: "2"},
 	}
-	paths := QualifiedStagePaths(stages)
+	paths, err := QualifiedStagePaths(stages)
+	require.NoError(t, err)
 	assert.Equal(t, "Build", paths["1"])
 	assert.Equal(t, "Test", paths["2"])
 	assert.Equal(t, "Deploy", paths["3"])
@@ -91,7 +94,8 @@ func TestQualifiedStagePaths_ParallelDuplicateNames(t *testing.T) {
 		{ID: "4", Name: "Run Bazel Build", FirstParent: "2"},
 		{ID: "5", Name: "Run Bazel Build", FirstParent: "3"},
 	}
-	paths := QualifiedStagePaths(stages)
+	paths, err := QualifiedStagePaths(stages)
+	require.NoError(t, err)
 	// Branch heads get their bare name.
 	assert.Equal(t, "RemoteExec", paths["2"])
 	assert.Equal(t, "RemoteCache", paths["3"])
@@ -110,7 +114,8 @@ func TestQualifiedStagePaths_SequentialWithinBranch(t *testing.T) {
 		{ID: "4", Name: "Compile", FirstParent: "2"},
 		{ID: "5", Name: "Package", FirstParent: "4"},
 	}
-	paths := QualifiedStagePaths(stages)
+	paths, err := QualifiedStagePaths(stages)
+	require.NoError(t, err)
 	assert.Equal(t, "Linux", paths["2"])
 	assert.Equal(t, "Linux/Compile", paths["4"])
 	assert.Equal(t, "Linux/Package", paths["5"])
@@ -126,20 +131,27 @@ func TestQualifiedStagePaths_NestedParallel(t *testing.T) {
 		{ID: "5", Name: "A", FirstParent: "4"},
 		{ID: "6", Name: "B", FirstParent: "4"},
 	}
-	paths := QualifiedStagePaths(stages)
+	paths, err := QualifiedStagePaths(stages)
+	require.NoError(t, err)
 	assert.Equal(t, "X", paths["2"])
 	assert.Equal(t, "X/A", paths["5"])
 	assert.Equal(t, "X/B", paths["6"])
 }
 
 func TestQualifiedStagePaths_Empty(t *testing.T) {
-	assert.Empty(t, QualifiedStagePaths(nil))
-	assert.Empty(t, QualifiedStagePaths([]Stage{}))
+	for _, stages := range [][]Stage{nil, {}} {
+		paths, err := QualifiedStagePaths(stages)
+		require.NoError(t, err)
+		assert.Empty(t, paths)
+	}
 }
 
 func TestBuildStageTree_Empty(t *testing.T) {
-	assert.Nil(t, BuildStageTree(nil))
-	assert.Nil(t, BuildStageTree([]Stage{}))
+	for _, stages := range [][]Stage{nil, {}} {
+		tree, err := BuildStageTree(stages)
+		require.NoError(t, err)
+		assert.Nil(t, tree)
+	}
 }
 
 func TestBuildStageTree_NoParents(t *testing.T) {
@@ -148,7 +160,8 @@ func TestBuildStageTree_NoParents(t *testing.T) {
 		{ID: "2", Name: "Test"},
 		{ID: "3", Name: "Deploy"},
 	}
-	got := BuildStageTree(stages)
+	got, err := BuildStageTree(stages)
+	require.NoError(t, err)
 	assert.Len(t, got, 3)
 	for _, s := range got {
 		assert.Equal(t, 0, s.Depth)
@@ -166,7 +179,8 @@ func TestBuildStageTree_ParallelWithChildren(t *testing.T) {
 		{ID: "4", Name: "branch-b", FirstParent: "2"},
 		{ID: "5", Name: "branch-c", FirstParent: "2"},
 	}
-	got := BuildStageTree(stages)
+	got, err := BuildStageTree(stages)
+	require.NoError(t, err)
 	assert.Len(t, got, 5)
 
 	assert.Equal(t, "Build", got[0].Name)
@@ -196,7 +210,8 @@ func TestBuildStageTree_NestedParallel(t *testing.T) {
 		{ID: "5", Name: "Sub-A", FirstParent: "4"},
 		{ID: "6", Name: "Sub-B", FirstParent: "4"},
 	}
-	got := BuildStageTree(stages)
+	got, err := BuildStageTree(stages)
+	require.NoError(t, err)
 	assert.Len(t, got, 6)
 	assert.Equal(t, 0, got[0].Depth) // Outer Parallel (root)
 	assert.Equal(t, 1, got[1].Depth) // Branch-A (child of fan-out)
@@ -213,7 +228,8 @@ func TestBuildStageTree_SequentialChain(t *testing.T) {
 		{ID: "2", Name: "Test", FirstParent: "1"},
 		{ID: "3", Name: "Deploy", FirstParent: "2"},
 	}
-	got := BuildStageTree(stages)
+	got, err := BuildStageTree(stages)
+	require.NoError(t, err)
 	assert.Len(t, got, 3)
 	for _, s := range got {
 		assert.Equal(t, 0, s.Depth, "sequential stage %q should be at depth 0", s.Name)
@@ -225,7 +241,8 @@ func TestBuildStageTree_OrphanParent(t *testing.T) {
 		{ID: "1", Name: "Build"},
 		{ID: "2", Name: "Orphan", FirstParent: "999"},
 	}
-	got := BuildStageTree(stages)
+	got, err := BuildStageTree(stages)
+	require.NoError(t, err)
 	assert.Len(t, got, 2)
 	assert.Equal(t, 0, got[0].Depth)
 	assert.Equal(t, 0, got[1].Depth)
@@ -240,7 +257,8 @@ func TestBuildStageTree_PreservesOrder(t *testing.T) {
 		{ID: "13", Name: "C", FirstParent: "10"},
 		{ID: "20", Name: "Teardown"},
 	}
-	got := BuildStageTree(stages)
+	got, err := BuildStageTree(stages)
+	require.NoError(t, err)
 	names := make([]string, len(got))
 	for i, s := range got {
 		names[i] = s.Name
@@ -258,7 +276,8 @@ func TestBuildStageTree_BranchSubStagesGrouped(t *testing.T) {
 		{ID: "5", Name: "sub-2", FirstParent: "4"},
 		{ID: "6", Name: "sub-3", FirstParent: "5"},
 	}
-	got := BuildStageTree(stages)
+	got, err := BuildStageTree(stages)
+	require.NoError(t, err)
 	assert.Len(t, got, 6)
 	assert.Equal(t, 0, got[0].Depth) // Parallel
 	assert.Equal(t, 1, got[1].Depth) // branch-a (branch header)
@@ -290,4 +309,149 @@ func TestResolveStageIDNotFoundListsIDs(t *testing.T) {
 	var nf *StageNotFoundError
 	assert.ErrorAs(t, err, &nf)
 	assert.NotContains(t, err.Error(), "--stage-id", "the jenkins layer names no CLI flags")
+}
+
+func TestStageTraversalRejectsMalformedGraphs(t *testing.T) {
+	cases := map[string][]Stage{
+		"self cycle":         {{ID: "1", Name: "Build", FirstParent: "1"}},
+		"cross cycle":        {{ID: "1", FirstParent: "2"}, {ID: "2", FirstParent: "1"}},
+		"disconnected cycle": {{ID: "root", Name: "Setup"}, {ID: "1", FirstParent: "2"}, {ID: "2", FirstParent: "1"}},
+		"duplicate ID":       {{ID: "1"}, {ID: "1"}},
+		"missing ID":         {{Name: "Build"}},
+		"excessive graph":    make([]Stage, 10001),
+	}
+	for name, stages := range cases {
+		t.Run(name, func(t *testing.T) {
+			require.ErrorIs(t, ValidateStageGraph(stages), ErrInvalidStageGraph)
+			paths, err := QualifiedStagePaths(stages)
+			require.ErrorIs(t, err, ErrInvalidStageGraph)
+			require.Nil(t, paths)
+			tree, err := BuildStageTree(stages)
+			require.ErrorIs(t, err, ErrInvalidStageGraph)
+			require.Nil(t, tree)
+			diff, err := CompareStages(nil, stages)
+			require.ErrorIs(t, err, ErrInvalidStageGraph)
+			require.Nil(t, diff)
+		})
+	}
+}
+
+func TestStagePathsUnorderedParallelAndOmittedAncestor(t *testing.T) {
+	stages := []Stage{
+		{ID: "4", Name: "Test", FirstParent: "2"},
+		{ID: "5", Name: "Test", FirstParent: "3"},
+		{ID: "3", Name: "Windows", FirstParent: "omitted"},
+		{ID: "2", Name: "Linux", FirstParent: "omitted"},
+	}
+	paths, err := QualifiedStagePaths(stages)
+	require.NoError(t, err)
+	require.Equal(t, map[string]string{"2": "Linux", "3": "Windows", "4": "Linux/Test", "5": "Windows/Test"}, paths)
+}
+
+func TestStageTraversalLongReversedSequentialChain(t *testing.T) {
+	stages := make([]Stage, 10000)
+	for i := range stages {
+		id := len(stages) - i
+		stages[i] = Stage{ID: fmt.Sprint(id), Name: "Build"}
+		if id > 1 {
+			stages[i].FirstParent = fmt.Sprint(id - 1)
+		}
+	}
+	paths, err := QualifiedStagePaths(stages)
+	require.NoError(t, err)
+	require.Len(t, paths, len(stages))
+	require.Equal(t, "Build", paths["10000"])
+	require.Equal(t, "Build", paths["1"])
+	tree, err := BuildStageTree(stages)
+	require.NoError(t, err)
+	require.Len(t, tree, len(stages))
+	require.Equal(t, "1", tree[0].ID)
+	require.Equal(t, "10000", tree[len(tree)-1].ID)
+	for _, stage := range tree {
+		require.Zero(t, stage.Depth)
+	}
+}
+
+// Compact remote metadata can multiply into much larger qualified paths.
+func TestQualifiedStagePathsRejectsNestedExpansion(t *testing.T) {
+	stages := []Stage{{ID: "root", Name: "Root"}}
+	parent := "root"
+	for i := 0; i < 130; i++ {
+		branch := fmt.Sprintf("branch-%d", i)
+		stages = append(stages,
+			Stage{ID: branch, Name: strings.Repeat("x", 256), FirstParent: parent},
+			Stage{ID: fmt.Sprintf("sibling-%d", i), Name: "Y", FirstParent: parent})
+		parent = branch
+	}
+	allowed, err := QualifiedStagePaths(stages[:129])
+	require.NoError(t, err)
+	require.Len(t, allowed, 129)
+	paths, err := QualifiedStagePaths(stages)
+	require.ErrorIs(t, err, ErrInvalidStageGraph, "qualified path expansion must be bounded independently of node count")
+	require.Nil(t, paths)
+}
+
+func TestBuildStageTreeRejectsExcessiveDisplayExpansion(t *testing.T) {
+	// An indented name column is padded to the deepest stage on every row.
+	stages := []Stage{{ID: "root", Name: "Root"}}
+	parent := "root"
+	for i := 0; i < 1500; i++ {
+		branch := fmt.Sprintf("branch-%d", i)
+		stages = append(stages,
+			Stage{ID: branch, Name: "X", FirstParent: parent},
+			Stage{ID: fmt.Sprintf("sibling-%d", i), Name: "Y", FirstParent: parent})
+		parent = branch
+	}
+	allowed, err := BuildStageTree(stages[:1501])
+	require.NoError(t, err)
+	require.Len(t, allowed, 1501)
+	tree, err := BuildStageTree(stages)
+	require.ErrorIs(t, err, ErrInvalidStageGraph, "stage indentation and padding must be bounded independently of node count")
+	require.Nil(t, tree)
+}
+
+func TestBuildStageTreeRejectsWideColumnExpansion(t *testing.T) {
+	for _, field := range []string{"name", "status"} {
+		t.Run(field, func(t *testing.T) {
+			stages := make([]Stage, 9)
+			for i := range stages {
+				stages[i] = Stage{ID: fmt.Sprint(i), Name: "Build", Status: "SUCCESS"}
+			}
+			if field == "name" {
+				stages[0].Name = strings.Repeat("x", 1<<20)
+			} else {
+				stages[0].Status = strings.Repeat("x", 1<<20)
+			}
+			tree, err := BuildStageTree(stages)
+			require.ErrorIs(t, err, ErrInvalidStageGraph)
+			require.Nil(t, tree)
+		})
+	}
+}
+
+func TestQualifiedStagePathsRejectsWideColumnExpansion(t *testing.T) {
+	stages := make([]Stage, 9)
+	for i := range stages {
+		stages[i] = Stage{ID: fmt.Sprint(i), Name: "Build"}
+	}
+	stages[0].Name = strings.Repeat("x", 1<<20)
+	paths, err := QualifiedStagePaths(stages)
+	require.ErrorIs(t, err, ErrInvalidStageGraph, "one long path must not expand into an excessive padded table column")
+	require.Nil(t, paths)
+}
+
+func TestQualifiedStagePathsRejectsCumulativeExpansion(t *testing.T) {
+	// Every path fits the padded-column budget, but all paths and newly
+	// allocated branch prefixes together exceed the cumulative budget.
+	stages := []Stage{
+		{ID: "root", Name: "Root"},
+		{ID: "branch", Name: strings.Repeat("x", 4096), FirstParent: "root"},
+		{ID: "sibling", Name: "Y", FirstParent: "root"},
+	}
+	for i := 0; i < 1100; i++ {
+		stages = append(stages, Stage{ID: fmt.Sprint(i), Name: "Leaf", FirstParent: "branch"})
+	}
+	paths, err := QualifiedStagePaths(stages)
+	require.ErrorIs(t, err, ErrInvalidStageGraph)
+	require.Nil(t, paths)
 }

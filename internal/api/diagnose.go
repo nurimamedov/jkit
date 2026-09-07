@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -94,6 +95,9 @@ func (c *Client) Diagnose(jobPath string, number int) (*DiagnoseResult, error) {
 
 	// Pipeline stages
 	stages, err := c.GetPipelineStages(jobPath, number)
+	if errors.Is(err, jenkins.ErrInvalidStageGraph) {
+		return nil, err
+	}
 	if err != nil || len(stages) == 0 {
 		// Non-pipeline job or Blue Ocean unavailable — try full console log
 		res.FailedStages = diagnoseFallbackConsole(c, jobPath, number)

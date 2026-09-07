@@ -66,6 +66,7 @@ type pruneKey struct {
 func writePruneConfig(t *testing.T, keys ...pruneKey) string {
 	t.Helper()
 	dir := t.TempDir()
+	require.NoError(t, os.Chmod(dir, 0700))
 	t.Setenv("JKIT_CONFIG_DIR", dir)
 	var b strings.Builder
 	b.WriteString("hosts:\n")
@@ -229,6 +230,7 @@ func TestAuthPruneSkipsUnusableHeir(t *testing.T) {
 func TestAuthPruneKeepsOtherUsersKey(t *testing.T) {
 	a := pruneServer(t)
 	dir := t.TempDir()
+	require.NoError(t, os.Chmod(dir, 0700))
 	t.Setenv("JKIT_CONFIG_DIR", dir)
 	path := filepath.Join(dir, "config.yml")
 	require.NoError(t, os.WriteFile(path, []byte(fmt.Sprintf(
@@ -317,6 +319,7 @@ func TestAuthPruneFormat(t *testing.T) {
 
 func TestAuthPruneUnreadableConfig(t *testing.T) {
 	dir := t.TempDir()
+	require.NoError(t, os.Chmod(dir, 0700))
 	t.Setenv("JKIT_CONFIG_DIR", dir)
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "config.yml"), []byte("hosts: [\n"), 0600))
 	_, _, err := runAuthPrune(t)

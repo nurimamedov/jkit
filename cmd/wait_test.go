@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -148,7 +149,15 @@ func TestWaitAmbiguousStageNamesNoLogFlag(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]any{"number": 5, "building": true})
 			return
 		}
-		http.Redirect(w, r, stages.URL+r.URL.RequestURI(), http.StatusTemporaryRedirect)
+		resp, err := http.Get(stages.URL + r.URL.RequestURI())
+		if err != nil {
+			t.Error(err)
+			http.Error(w, "fixture proxy", 500)
+			return
+		}
+		defer resp.Body.Close()
+		w.WriteHeader(resp.StatusCode)
+		_, _ = io.Copy(w, resp.Body)
 	}))
 	defer srv.Close()
 	setupTestConfig(t, srv.URL)

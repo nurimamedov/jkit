@@ -1,7 +1,6 @@
 package config
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -75,12 +74,7 @@ func NormalizeHost(host string) string {
 }
 
 func Load() (*Config, error) {
-	dir, err := ConfigDir()
-	if err != nil {
-		return nil, err
-	}
-	path := filepath.Join(dir, "config.yml")
-	data, err := os.ReadFile(path)
+	data, err := ReadRaw()
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return &Config{Hosts: make(map[string]*HostConfig)}, nil
@@ -91,10 +85,18 @@ func Load() (*Config, error) {
 }
 
 // Parse reads config.yml content. Empty input is a config without hosts.
+func ReadRaw() ([]byte, error) {
+	dir, err := ConfigDir()
+	if err != nil {
+		return nil, err
+	}
+	return readCredentials(dir)
+}
+
 func Parse(data []byte) (*Config, error) {
 	var cfg Config
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("parsing config: %w", err)
+		return nil, errors.New("parsing config: invalid YAML")
 	}
 	if cfg.Hosts == nil {
 		cfg.Hosts = make(map[string]*HostConfig)
@@ -107,15 +109,11 @@ func (c *Config) Save() error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return fmt.Errorf("creating config dir: %w", err)
-	}
 	data, err := yaml.Marshal(c)
 	if err != nil {
 		return fmt.Errorf("marshaling config: %w", err)
 	}
-	path := filepath.Join(dir, "config.yml")
-	return os.WriteFile(path, data, 0600)
+	return writeCredentials(dir, data)
 }
 
 func (c *Config) DefaultHost() (string, *HostConfig, error) {
@@ -158,65 +156,19 @@ func Path() (string, error) {
 	return filepath.Join(dir, "config.yml"), nil
 }
 
-// ReplaceWithBackup copies config.yml to config.yml.bak, then writes c over
-// it, both 0600 and each through a rename so a crash leaves either the old or
-// the new file. A symlinked config.yml stays a symlink: the new content goes
-// to its target, the backup next to the link. It refuses when config.yml no
-// longer holds expected, so a change made since it was read is not lost.
-// Returns the backup path.
+// ReplaceWithBackup saves a private backup before replacing the validated store.
+// It refuses symlinks and changes since the caller read expected.
 func (c *Config) ReplaceWithBackup(expected []byte) (string, error) {
-	path, err := Path()
+	dir, err := ConfigDir()
 	if err != nil {
 		return "", err
-	}
-	current, err := os.ReadFile(path)
-	if err != nil {
-		return "", fmt.Errorf("reading config: %w", err)
-	}
-	if !bytes.Equal(current, expected) {
-		return "", fmt.Errorf("%s changed while hosts were checked — re-run", path)
 	}
 	data, err := yaml.Marshal(c)
 	if err != nil {
 		return "", fmt.Errorf("marshaling config: %w", err)
 	}
-	target, err := filepath.EvalSymlinks(path)
-	if err != nil {
-		return "", fmt.Errorf("resolving config path: %w", err)
+	if err := replaceCredentialsWithBackup(dir, expected, data); err != nil {
+		return "", err
 	}
-	backup := path + ".bak"
-	if err := writeFileAtomic(backup, current); err != nil {
-		return "", fmt.Errorf("writing backup: %w", err)
-	}
-	if err := writeFileAtomic(target, data); err != nil {
-		return "", fmt.Errorf("writing config: %w", err)
-	}
-	return backup, nil
-}
-
-// writeFileAtomic replaces path with a fresh 0600 file, so an existing file's
-// looser mode does not survive.
-func writeFileAtomic(path string, data []byte) error {
-	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
-	if err != nil {
-		return err
-	}
-	tmp := f.Name()
-	defer func() { _ = os.Remove(tmp) }()
-	if err := f.Chmod(0600); err != nil {
-		_ = f.Close()
-		return err
-	}
-	if _, err := f.Write(data); err != nil {
-		_ = f.Close()
-		return err
-	}
-	if err := f.Sync(); err != nil {
-		_ = f.Close()
-		return err
-	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	return filepath.Join(dir, "config.yml.bak"), nil
 }

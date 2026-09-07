@@ -231,6 +231,10 @@ func sleep(ctx context.Context, d time.Duration) error {
 // A stage missing from the list may simply not have started, which only the
 // build finishing rules out.
 func stageResult(stages []jenkins.Stage, t Target, stageID *string, build *jenkins.Build) (Result, bool, error) {
+	paths, err := jenkins.QualifiedStagePaths(stages)
+	if err != nil {
+		return Result{}, false, err
+	}
 	if *stageID == "" {
 		id, err := jenkins.ResolveStageID(stages, t.Stage)
 		var nf *jenkins.StageNotFoundError
@@ -249,7 +253,7 @@ func stageResult(stages []jenkins.Stage, t Target, stageID *string, build *jenki
 		}
 		*stageID = id
 		if t.UntilListed {
-			return Result{StageID: id, StagePath: jenkins.QualifiedStagePaths(stages)[id]}, true, nil
+			return Result{StageID: id, StagePath: paths[id]}, true, nil
 		}
 	}
 
@@ -257,7 +261,7 @@ func stageResult(stages []jenkins.Stage, t Target, stageID *string, build *jenki
 		if s.ID != *stageID {
 			continue
 		}
-		res := Result{Status: s.Status, DurationMillis: s.DurationMillis, StagePath: jenkins.QualifiedStagePaths(stages)[s.ID]}
+		res := Result{Status: s.Status, DurationMillis: s.DurationMillis, StagePath: paths[s.ID]}
 		if HasResult(s.Status) {
 			return res, true, nil
 		}

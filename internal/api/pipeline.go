@@ -83,6 +83,9 @@ func (c *Client) getPipelineStagesPGV(jobPath string, number int) ([]jenkins.Sta
 	if stages == nil {
 		stages = []jenkins.Stage{}
 	}
+	if err := jenkins.ValidateStageGraph(stages); err != nil {
+		return nil, err
+	}
 	return stages, nil
 }
 
@@ -115,7 +118,7 @@ func (c *Client) getPipelineStagesBlueOcean(jobPath string, number int) ([]jenki
 	segments := normalizeBluePath(jobPath)
 	path := fmt.Sprintf("/blue/rest/organizations/jenkins/pipelines/%s/runs/%d/nodes/", segments, number)
 
-	resp, err := c.Get(path, url.Values{"limit": {"10000"}})
+	resp, err := c.Get(path, url.Values{"limit": {fmt.Sprint(jenkins.MaxStageGraphNodes)}})
 	if err != nil {
 		var nfe *jenkins.NotFoundError
 		if errors.As(err, &nfe) {
@@ -128,6 +131,9 @@ func (c *Client) getPipelineStagesBlueOcean(jobPath string, number int) ([]jenki
 	var stages []jenkins.Stage
 	if err := json.NewDecoder(resp.Body).Decode(&stages); err != nil {
 		return nil, fmt.Errorf("decoding stages: %w", err)
+	}
+	if err := jenkins.ValidateStageGraph(stages); err != nil {
+		return nil, err
 	}
 	return stages, nil
 }

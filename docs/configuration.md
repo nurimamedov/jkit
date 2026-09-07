@@ -17,6 +17,20 @@ hosts:
 
 Created automatically by `jkit auth login`. First host added becomes the default.
 
+Tokens are plaintext. On Unix systems, jkit requires the credential directory to
+be owned by the current user with mode `0700`, and an existing `config.yml` to
+be a regular file owned by that user with mode `0600`. Unsafe existing stores are
+rejected before reading or saving; jkit does not silently change permissions.
+Inspect an existing store and correct its ownership and modes before retrying.
+Credential-directory and credential-file symlinks are rejected. Keep the store
+under trusted parent directories; platform aliases such as macOS `/var` are
+allowed in ancestor paths.
+
+Saves use a private temporary file and atomic replacement after writing and
+closing it. Failed saves preserve the previous file. This extended build
+supports credential storage on Unix platforms, including macOS and Linux;
+other platforms fail with an explicit unsupported-storage error.
+
 ## Environment Variables
 
 | Variable | Description | Default |

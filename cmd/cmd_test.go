@@ -25,6 +25,7 @@ import (
 func setupTestConfig(t *testing.T, host string) {
 	t.Helper()
 	dir := t.TempDir()
+	require.NoError(t, os.Chmod(dir, 0700))
 	t.Setenv("JKIT_CONFIG_DIR", dir)
 	cfg := []byte("hosts:\n  " + host + ":\n    user: admin\n    token: secret\n    default: true\n")
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "config.yml"), cfg, 0600))
@@ -147,6 +148,7 @@ func TestListCommandFolder(t *testing.T) {
 
 func TestListCommandNoConfig(t *testing.T) {
 	dir := t.TempDir()
+	require.NoError(t, os.Chmod(dir, 0700))
 	t.Setenv("JKIT_CONFIG_DIR", dir)
 
 	_, err := executeCmd(t, "list")
@@ -550,6 +552,7 @@ func TestLintCommandFailure(t *testing.T) {
 
 func TestLintCommandMissingFile(t *testing.T) {
 	dir := t.TempDir()
+	require.NoError(t, os.Chmod(dir, 0700))
 	t.Setenv("JKIT_CONFIG_DIR", dir)
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "config.yml"),
 		[]byte("hosts:\n  http://localhost:\n    user: a\n    token: b\n    default: true\n"), 0600))
@@ -1388,6 +1391,7 @@ func TestAuthStatusHostOverride(t *testing.T) {
 
 	// Config with two hosts
 	dir := t.TempDir()
+	require.NoError(t, os.Chmod(dir, 0700))
 	t.Setenv("JKIT_CONFIG_DIR", dir)
 	cfg := fmt.Sprintf("hosts:\n  %s:\n    user: admin\n    token: secret\n    default: true\n  %s:\n    user: other\n    token: tok2\n", srv1.URL, srv2.URL)
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "config.yml"), []byte(cfg), 0600))
@@ -1731,6 +1735,7 @@ func TestAuthLoginStripsFragmentFromHost(t *testing.T) {
 	}))
 	defer srv.Close()
 	dir := t.TempDir()
+	require.NoError(t, os.Chmod(dir, 0700))
 	t.Setenv("JKIT_CONFIG_DIR", dir)
 
 	_, err := executeCmd(t, "auth", "login", "--host", srv.URL+"/#", "--user", "u", "--token", "t")

@@ -34,11 +34,7 @@ type pruneResult struct {
 }
 
 func runPrune(cmd *cobra.Command, args []string) error {
-	path, err := config.Path()
-	if err != nil {
-		return err
-	}
-	raw, err := os.ReadFile(path)
+	raw, err := config.ReadRaw()
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("reading config: %w", err)
 	}

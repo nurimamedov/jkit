@@ -159,6 +159,26 @@ func runDiff(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Preserve copied-value redaction before raw parameters leave this command.
+	redact := output.ParameterRedactor(build1, build2).Replace
+	for i := range result.Params {
+		result.Params[i].Old = redact(result.Params[i].Old)
+		result.Params[i].New = redact(result.Params[i].New)
+	}
+	for i := range result.Stages {
+		result.Stages[i].Name = redact(result.Stages[i].Name)
+		result.Stages[i].Path = redact(result.Stages[i].Path)
+	}
+	for i := range result.Tests {
+		result.Tests[i].Suite = redact(result.Tests[i].Suite)
+		result.Tests[i].ClassName = redact(result.Tests[i].ClassName)
+		result.Tests[i].Test = redact(result.Tests[i].Test)
+	}
+	for i := range result.Commits {
+		result.Commits[i].Author = redact(result.Commits[i].Author)
+		result.Commits[i].Message = redact(result.Commits[i].Message)
+	}
+
 	isJSON, _ := cmd.Flags().GetBool("json")
 	tmpl, _ := cmd.Flags().GetString("format")
 	f := output.NewFormatter(os.Stdout, isJSON, tmpl)
@@ -195,12 +215,12 @@ func diffParams(b1, b2 *jenkins.Build) []ParamDiff {
 	for k, v2 := range p2 {
 		v1, ok := p1[k]
 		if !ok || v1 != v2 {
-			diffs = append(diffs, ParamDiff{Name: k, Old: v1, New: v2})
+			diffs = append(diffs, ParamDiff{Name: k, Old: output.MaskParameter(k, v1), New: output.MaskParameter(k, v2)})
 		}
 	}
 	for k, v1 := range p1 {
 		if _, ok := p2[k]; !ok {
-			diffs = append(diffs, ParamDiff{Name: k, Old: v1, New: "(removed)"})
+			diffs = append(diffs, ParamDiff{Name: k, Old: output.MaskParameter(k, v1), New: "(removed)"})
 		}
 	}
 	return diffs
