@@ -45,7 +45,7 @@ func openStore(dir string) (*os.Root, error) {
 
 func checkPrivate(info os.FileInfo, mode os.FileMode) error {
 	stat, ok := info.Sys().(*syscall.Stat_t)
-	if !ok || stat.Uid != uint32(os.Geteuid()) {
+	if !ok || int64(stat.Uid) != int64(os.Geteuid()) {
 		return errors.New("must be owned by the current user")
 	}
 	if info.Mode().Perm() != mode || info.Mode()&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0 {
