@@ -101,7 +101,7 @@ func (c *Client) GetBuildHistory(jobPath string, limit int) ([]jenkins.Build, er
 
 func (c *Client) GetBuild(jobPath string, number int) (*jenkins.Build, error) {
 	path := fmt.Sprintf("%s/%d/api/json", NormalizeJobPath(jobPath), number)
-	query := url.Values{"tree": {"number,result,timestamp,duration,building,url,actions[_class,parameters[name,value],causes[shortDescription,_class]],changeSets[items[commitId,msg,author[fullName],timestamp]]"}}
+	query := url.Values{"tree": {"number,queueId,result,timestamp,duration,building,url,actions[_class,parameters[name,value],causes[shortDescription,_class]],changeSets[items[commitId,msg,author[fullName],timestamp]]"}}
 
 	resp, err := c.Get(path, query)
 	if err != nil {
@@ -260,7 +260,7 @@ func (c *Client) TriggerBuild(jobPath string, params map[string]string) (*Trigge
 		path += "/build"
 	}
 
-	resp, err := c.Post(path, body, contentType)
+	resp, err := c.PostOnce(path, body, contentType)
 	if err != nil {
 		var srvErr *jenkins.ServerError
 		var nfErr *jenkins.NotFoundError
@@ -279,26 +279,47 @@ func (c *Client) TriggerBuild(jobPath string, params map[string]string) (*Trigge
 		}
 		return nil, fmt.Errorf("triggering build: %w", err)
 	}
-	defer CloseBody(resp)
+	defer func() { _ = resp.Body.Close() }()
 
 	if indexing {
 		return &TriggerResult{Indexing: true, OrgFolder: orgFolder}, nil
 	}
-
-	loc := resp.Header.Get("Location")
-	if loc == "" {
-		return nil, fmt.Errorf("no queue item returned — Jenkins did not provide a Location header")
-	}
-	// Parse queue item ID from Location header: .../queue/item/123/
-	parts := strings.Split(strings.TrimRight(loc, "/"), "/")
-	if len(parts) == 0 {
-		return nil, fmt.Errorf("could not parse queue item from Location: %s", loc)
-	}
-	id, err := strconv.Atoi(parts[len(parts)-1])
+	id, err := c.queueIDFromLocation(resp.Header.Get("Location"))
 	if err != nil {
-		return nil, fmt.Errorf("could not parse queue item ID from Location %q: %w", loc, err)
+		return nil, err
 	}
 	return &TriggerResult{QueueID: id}, nil
+}
+
+// queueIDFromLocation accepts only an absolute URL on this Jenkins origin or
+// a root-relative canonical queue path, including the configured context path.
+func (c *Client) queueIDFromLocation(location string) (int, error) {
+	invalid := fmt.Errorf("invalid queue receipt Location — submission outcome is unknown")
+	base, err := url.Parse(c.host)
+	if err != nil || originForURL(base).host == "" {
+		return 0, invalid
+	}
+	loc, err := url.Parse(location)
+	if err != nil || location == "" || strings.ContainsAny(location, "?#") || loc.User != nil || loc.Opaque != "" || loc.RawPath != "" {
+		return 0, invalid
+	}
+	if loc.IsAbs() {
+		if !originForURL(base).allows(loc) {
+			return 0, invalid
+		}
+	} else if loc.Host != "" || !strings.HasPrefix(location, "/") || strings.HasPrefix(location, "//") {
+		return 0, invalid
+	}
+	prefix := strings.TrimRight(base.Path, "/") + "/queue/item/"
+	if !strings.HasPrefix(loc.Path, prefix) || !strings.HasSuffix(loc.Path, "/") {
+		return 0, invalid
+	}
+	rawID := strings.TrimSuffix(strings.TrimPrefix(loc.Path, prefix), "/")
+	id, err := strconv.Atoi(rawID)
+	if err != nil || id <= 0 || strconv.Itoa(id) != rawID {
+		return 0, invalid
+	}
+	return id, nil
 }
 
 // explainRejectedTrigger turns a 400 from a trigger into advice. The common

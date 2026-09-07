@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -33,6 +34,13 @@ func init() {
 }
 
 func runRun(cmd *cobra.Command, args []string) error {
+	isJSON, _ := cmd.Flags().GetBool("json")
+	wait, _ := cmd.Flags().GetBool("wait")
+	showLog, _ := cmd.Flags().GetBool("log")
+	if isJSON && (wait || showLog) {
+		return fmt.Errorf("--json cannot be combined with --wait or --log")
+	}
+
 	client, jobPath, _, err := resolveJobArgs(cmd, args, false)
 	if err != nil {
 		return err
@@ -49,8 +57,6 @@ func runRun(cmd *cobra.Command, args []string) error {
 		params[parts[0]] = parts[1]
 	}
 
-	wait, _ := cmd.Flags().GetBool("wait")
-	showLog, _ := cmd.Flags().GetBool("log")
 	if showLog {
 		wait = true
 	}
@@ -61,6 +67,12 @@ func runRun(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if res.Indexing {
+		if isJSON {
+			return json.NewEncoder(os.Stdout).Encode(struct {
+				Job      string `json:"job"`
+				Indexing bool   `json:"indexing"`
+			}{jobPath, true})
+		}
 		if res.OrgFolder {
 			_, _ = fmt.Fprintf(os.Stderr, "Scan triggered for %s. Pick a repository and branch: jkit run %s/<repo> --branch <name>; see 'jkit scan %s' for the scan result.\n", jobPath, jobPath, jobPath)
 		} else {
@@ -72,6 +84,13 @@ func runRun(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 	queueID := res.QueueID
+	if isJSON {
+		return json.NewEncoder(os.Stdout).Encode(struct {
+			Job      string `json:"job"`
+			QueueID  int    `json:"queueId"`
+			QueueURL string `json:"queueUrl"`
+		}{Job: jobPath, QueueID: queueID, QueueURL: fmt.Sprintf("%s/queue/item/%d/", client.Host(), queueID)})
+	}
 	_, _ = fmt.Fprintf(os.Stderr, "Build queued (queue item #%d)\n", queueID)
 
 	if !wait {

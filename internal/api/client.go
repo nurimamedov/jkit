@@ -307,6 +307,40 @@ func (c *Client) Post(path string, body io.Reader, contentType string) (*http.Re
 	return resp, nil
 }
 
+// PostOnce fetches a crumb before making one mutation request. It never retries
+// a failed POST, including a stale crumb, and never follows its redirects.
+func (c *Client) PostOnce(path string, body io.Reader, contentType string) (*http.Response, error) {
+	crumb, err := c.crumbs.ensureCrumb()
+	if err != nil {
+		return nil, fmt.Errorf("obtaining crumb: %w", err)
+	}
+	if body == nil {
+		body = strings.NewReader("")
+	}
+	// Keep Body non-nil and GetBody unset, including for an empty form. This
+	// prevents the transport from treating this mutation as replayable.
+	req, err := http.NewRequest(http.MethodPost, c.host+path, io.NopCloser(body))
+	if err != nil {
+		return nil, fmt.Errorf("creating request: %w", err)
+	}
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+	if crumb != nil {
+		req.Header.Set(crumb.CrumbRequestField, crumb.Crumb)
+	}
+	client := *c.httpClient
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, &jenkins.UnreachableError{Host: c.host, Cause: err}
+	}
+	if err := checkResponse(resp); err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
 func (c *Client) doWithRetry(method, rawURL string, bodyFn func() io.Reader, contentType string, crumb *crumbInfo) (*http.Response, error) {
 	header := http.Header{}
 	if contentType != "" {

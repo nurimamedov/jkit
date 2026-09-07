@@ -164,6 +164,7 @@ const (
 )
 
 type Build struct {
+	QueueID    int           `json:"queueId,omitempty"`
 	Number     int           `json:"number"`
 	Result     string        `json:"result"`
 	Building   bool          `json:"building"`
@@ -338,9 +339,10 @@ type PGVStep struct {
 }
 
 type QueueItem struct {
-	ID   int    `json:"id"`
-	Why  string `json:"why"`
-	Task struct {
+	Cancelled bool   `json:"cancelled"`
+	ID        int    `json:"id"`
+	Why       string `json:"why"`
+	Task      struct {
 		Name string `json:"name"`
 		URL  string `json:"url"`
 	} `json:"task"`

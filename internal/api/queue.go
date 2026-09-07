@@ -62,6 +62,10 @@ func (c *Client) CancelQueueItem(id int) error {
 }
 
 func (c *Client) GetQueueItem(id int) (*jenkins.QueueItem, error) {
+	if id <= 0 {
+		return nil, fmt.Errorf("queue ID must be positive")
+	}
+
 	path := fmt.Sprintf("/queue/item/%d/api/json", id)
 
 	resp, err := c.Get(path, nil)
@@ -73,6 +77,9 @@ func (c *Client) GetQueueItem(id int) (*jenkins.QueueItem, error) {
 	var item jenkins.QueueItem
 	if err := json.NewDecoder(resp.Body).Decode(&item); err != nil {
 		return nil, fmt.Errorf("decoding queue item: %w", err)
+	}
+	if item.ID != id {
+		return nil, fmt.Errorf("queue item ID does not match the requested receipt")
 	}
 	return &item, nil
 }

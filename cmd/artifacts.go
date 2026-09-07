@@ -23,14 +23,36 @@ var artifactsCmd = &cobra.Command{
 }
 
 func init() {
+	artifactsCmd.Flags().Bool("stdout", false, "Write one exact artifact to stdout (64 KiB maximum; requires explicit build)")
 	artifactsCmd.Flags().StringP("download", "d", "", "Download artifact by filename")
 	artifactsCmd.Flags().StringP("output", "o", "", "Output file path (default: current dir with original filename)")
 	rootCmd.AddCommand(artifactsCmd)
 }
 
 func runArtifacts(cmd *cobra.Command, args []string) error {
+	stdout, _ := cmd.Flags().GetBool("stdout")
+	downloadName, _ := cmd.Flags().GetString("download")
+	outputPath, _ := cmd.Flags().GetString("output")
+	if stdout {
+		if downloadName == "" || cmd.Flags().Changed("output") {
+			return fmt.Errorf("--stdout requires --download and cannot be combined with --output")
+		}
+		if err := api.ValidateArtifactPath(downloadName); err != nil {
+			return err
+		}
+	}
+
 	client, jobPath, buildNum, err := resolveJobArgs(cmd, args, false)
 	if err != nil {
+		return err
+	}
+
+	if stdout {
+		data, err := client.ReadArtifactBounded(jobPath, buildNum, downloadName)
+		if err != nil {
+			return err
+		}
+		_, err = os.Stdout.Write(data)
 		return err
 	}
 
@@ -45,9 +67,6 @@ func runArtifacts(cmd *cobra.Command, args []string) error {
 		}
 		buildNum = builds[0].Number
 	}
-
-	downloadName, _ := cmd.Flags().GetString("download")
-	outputPath, _ := cmd.Flags().GetString("output")
 
 	if downloadName != "" {
 		return downloadArtifact(client, jobPath, buildNum, downloadName, outputPath)

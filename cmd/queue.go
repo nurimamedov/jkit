@@ -30,15 +30,30 @@ var queueCancelCmd = &cobra.Command{
 }
 
 func init() {
+	queueCmd.Flags().Int("id", 0, "Get a specific queue item (requires --json)")
 	queueCmd.Flags().String("job", "", "Filter queue items by job name (substring match)")
 	queueCmd.AddCommand(queueCancelCmd)
 	rootCmd.AddCommand(queueCmd)
 }
 
 func runQueue(cmd *cobra.Command, args []string) error {
+	id, _ := cmd.Flags().GetInt("id")
+	isJSON, _ := cmd.Flags().GetBool("json")
+	if cmd.Flags().Changed("id") && (id <= 0 || !isJSON || cmd.Flags().Changed("job")) {
+		return fmt.Errorf("--id requires a positive queue ID and --json, without --job")
+	}
+
 	client, _, err := clientFromCmd(cmd)
 	if err != nil {
 		return err
+	}
+
+	if id > 0 {
+		item, err := client.GetQueueItem(id)
+		if err != nil {
+			return err
+		}
+		return output.NewFormatter(os.Stdout, true, "").Output(item, nil)
 	}
 
 	items, err := client.GetQueue()
@@ -59,7 +74,6 @@ func runQueue(cmd *cobra.Command, args []string) error {
 		items = filtered
 	}
 
-	isJSON, _ := cmd.Flags().GetBool("json")
 	tmpl, _ := cmd.Flags().GetString("format")
 	f := output.NewFormatter(os.Stdout, isJSON, tmpl)
 

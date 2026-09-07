@@ -312,7 +312,8 @@ jkit status [job] [build#] [--limit N]
 46  FAILURE   1m12s     Jan 02 14:00
 ```
 
-**Detail mode** (with build#) — shows build info, parameters, and pipeline stages:
+**Detail mode** (with build#) — shows build info, parameters, and pipeline stages.
+JSON includes `queueId` when Jenkins reports a nonzero queue identity:
 
 ```
 Build:    #47
@@ -747,6 +748,19 @@ jkit run [job] [-p KEY=VALUE]... [--wait] [--log]
 | `-p, --param KEY=VALUE` | Build parameter (repeatable) |
 | `--wait` | Wait for build to complete |
 | `--log` | Stream build log (implies `--wait`) |
+| `--json` | Print a queue receipt; incompatible with `--wait` and `--log` |
+
+`run my-app --json` writes only a receipt to stdout:
+
+```json
+{"job":"my-app","queueId":42,"queueUrl":"https://jenkins.company.com/queue/item/42/"}
+```
+
+The queue URL must identify a positive queue item at the configured Jenkins
+origin and context path. Invalid or missing receipts fail; the submission may
+still have succeeded. The trigger fetches a crumb first, then makes one POST
+without retries or redirects, including after HTTP 403. Reconcile an uncertain
+submission before deciding whether to trigger again.
 
 **Exit codes** (with `--wait`):
 
@@ -1355,8 +1369,19 @@ jkit artifacts [job] [build#] [-d FILENAME] [-o PATH]
 |------|-------------|
 | `-d, --download` | Download artifact by filename |
 | `-o, --output` | Output file path (default: original filename in cwd) |
+| `--stdout` | Read one exact relative path to stdout, at most 64 KiB |
 
 Defaults to the latest build. Without `-d`, lists artifacts as a table.
+
+`--stdout` requires `--download` and an explicit positive build number (or a
+build URL). It rejects `--output`, traversal/URL syntax, missing artifacts, and
+duplicate relative paths. Filename-only matching is disabled in this mode.
+The complete artifact must fit within 64 KiB and transfer successfully before
+any bytes reach stdout. It never writes a file.
+
+```bash
+jkit artifacts my-app 42 --download ci-gate-evidence.json --stdout
+```
 
 Downloads use a private temporary file and replace a regular destination only
 after the transfer, sync, and close succeed. Existing or dangling destination
@@ -1695,8 +1720,14 @@ jkit queue [--job FILTER]
 | Flag | Description |
 |------|-------------|
 | `--job` | Filter queue items by job name (substring match) |
+| `--id N` | Read one positive queue ID; requires `--json`, incompatible with `--job` |
 
 Displays queue ID, job name, and reason for each pending build.
+
+`queue --id 42 --json` reads `/queue/item/42/api/json` and returns one object
+with `id`, `why`, `task`, `executable`, and `cancelled`. It preserves cancellation
+and executable information after an item leaves the pending queue. Missing
+items or a mismatched response ID fail.
 
 ```bash
 jkit queue                    # all queued builds
