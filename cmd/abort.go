@@ -1,12 +1,16 @@
 package cmd
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/ysmaoui/jkit/internal/api"
 	"github.com/ysmaoui/jkit/internal/output"
 )
 
@@ -26,6 +30,11 @@ func init() {
 }
 
 func runAbort(cmd *cobra.Command, args []string) error {
+	isJSON, _ := cmd.Flags().GetBool("json")
+	if isJSON {
+		return runAbortJSON(cmd, args)
+	}
+
 	client, jobPath, buildNum, err := resolveJobArgs(cmd, args, false)
 	if err != nil {
 		return err
@@ -82,4 +91,37 @@ func runAbort(cmd *cobra.Command, args []string) error {
 			return nil
 		}
 	}
+}
+
+func runAbortJSON(cmd *cobra.Command, args []string) error {
+	wait, _ := cmd.Flags().GetBool("wait")
+	verbose, _ := cmd.Flags().GetBool("verbose")
+	format, _ := cmd.Flags().GetString("format")
+	branch, _ := cmd.Flags().GetString("branch")
+	if len(args) != 2 || wait || verbose || format != "" || branch != "" {
+		return fmt.Errorf("abort --json requires JOB BUILD without --wait, --verbose, --format or --branch")
+	}
+	if err := api.ValidateConfigJob(args[0]); err != nil {
+		return err
+	}
+	number, err := strconv.Atoi(args[1])
+	if err != nil || number <= 0 || strconv.Itoa(number) != args[1] {
+		return fmt.Errorf("abort --json requires a positive explicit build number")
+	}
+	rawTimeout, _ := cmd.Flags().GetString("timeout")
+	timeout, err := time.ParseDuration(rawTimeout)
+	if err != nil || timeout <= 0 || timeout > 120*time.Second {
+		return fmt.Errorf("abort timeout must be positive and at most 120s")
+	}
+	ctx, cancel := context.WithTimeout(cmd.Context(), timeout)
+	defer cancel()
+	client, _, err := clientFromCmd(cmd)
+	if err != nil {
+		return fmt.Errorf("cannot load Jenkins credentials for abort")
+	}
+	receipt, err := client.AbortBuildOnce(ctx, args[0], number)
+	if err != nil {
+		return err
+	}
+	return json.NewEncoder(os.Stdout).Encode(receipt)
 }

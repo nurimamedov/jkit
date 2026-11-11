@@ -136,6 +136,9 @@ pipeline {
             steps {
                 sh \'\'\'
                     export JKIT_CONFIG_DIR="$WORKSPACE/.jkit"
+                    # The container reaches Jenkins internally; machine controls use the published URL.
+                    export JENKINS_URL=http://localhost:8080/
+                    export BUILD_URL="http://localhost:8080/job/export-pipeline/$BUILD_NUMBER/"
                     jkit auth login --host http://localhost:8080 --user admin --token admin
                     jkit export html -o snapshot.html 2>snapshot.err
                     jkit export html --log-source steps -o snapshot-steps.html

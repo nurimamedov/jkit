@@ -315,6 +315,18 @@ func (c *Client) PostOnce(path string, body io.Reader, contentType string) (*htt
 
 // PostOnceContext shares cancellation across crumb retrieval and the one POST.
 func (c *Client) PostOnceContext(ctx context.Context, path string, body io.Reader, contentType string) (*http.Response, error) {
+	resp, err := c.postOnceResponseContext(ctx, path, body, contentType)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkResponse(resp); err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+// postOnceResponseContext leaves status interpretation to a control endpoint.
+func (c *Client) postOnceResponseContext(ctx context.Context, path string, body io.Reader, contentType string) (*http.Response, error) {
 	crumb, err := c.crumbs.ensureCrumbContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("obtaining crumb: %w", err)
@@ -339,9 +351,6 @@ func (c *Client) PostOnceContext(ctx context.Context, path string, body io.Reade
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, &jenkins.UnreachableError{Host: c.host, Cause: err}
-	}
-	if err := checkResponse(resp); err != nil {
-		return nil, err
 	}
 	return resp, nil
 }

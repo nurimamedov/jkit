@@ -14,4 +14,4 @@ jenkins:
 
 unclassified:
   location:
-    url: http://localhost:8080/
+    url: ${JKIT_TEST_JENKINS_URL}

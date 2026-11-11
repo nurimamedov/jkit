@@ -311,6 +311,12 @@ GET /computer/api/json?tree=computer[oneOffExecutors[currentExecutable[url,times
 # Jenkinsfile validation (linting)
 POST /pipeline-model-converter/validate  # body: jenkinsfile=<contents>
 
+# Extended exact job copy (core; requires Job/Create on the destination parent)
+POST /createItem?name={name}
+POST /job/{parent}/createItem?name={name}
+# Exact approved XML, one POST, no redirect/retry; absent destination only.
+# Source/destination fullName and normalized destination XML are read separately.
+
 # Job definition (the only source; see the note below)
 GET /job/{path}/config.xml               # needs Job/ExtendedRead
 
@@ -1044,3 +1050,20 @@ thing. Getting this wrong scales with every elevated command added.
 - Credential management within Jenkins
 - Webhook configuration
 
+
+
+## Extended build exception: explicit configuration controls
+
+`0.10.1-ext.2` retains the extended `job-config get/update` extension and adds
+`job-config copy SOURCE DEST --json --expected-sha256 HASH`. This deliberately
+extends the upstream mutation boundary for explicitly authorized workflows.
+COPY creates an absent standalone freestyle or pipeline job from approved
+bounded exact XML, rejects persisted automatic triggers and managed branch
+jobs, makes one `createItem` POST, and verifies exact destination identity and
+normalized XML configuration (Jenkins reserializes the submitted bytes). It never overwrites an existing target or starts a build. HTTP uncertainty
+requires read-only reconciliation before further mutation.
+
+Machine aborts require an explicit natural job path and positive number. Their
+strict reads validate job/build identities; one stop POST accepts 2xx or a 302
+to the exact same run without following it. Submission and observed terminal
+state are separate receipt fields. Existing human abort behavior is retained.

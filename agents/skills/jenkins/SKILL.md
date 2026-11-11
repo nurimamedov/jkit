@@ -495,3 +495,23 @@ redirects or retries; the receipt is an acknowledgement, not readback verificati
 `jkit queue --id ID --json` reads a queue receipt. `jkit run JOB --json` returns a
 submission receipt without waiting; it cannot combine with --wait or --log.
 `jkit artifacts JOB BUILD --download NAME --stdout` emits exact bytes up to 64 KiB.
+
+
+## Extended mutation receipts (0.10.1-ext.2)
+
+Use an explicit natural job path and number for machine aborts:
+`jkit abort team/job 42 --json`. Receipt fields are `job`, `buildNumber`,
+`submitted`, `alreadyCompleted`; independently read the numbered run to confirm
+it stopped. No latest inference or automatic mutation retry.
+
+To copy an approved standalone job, read `job-config digest SOURCE --json` first (exact `sha256` and normalized
+`configurationSha256`),
+then use `jkit job-config copy SOURCE DEST --json --expected-sha256 HASH`.
+This refuses existing targets, managed branch jobs and persisted automatic
+triggers, creates once, and verifies normalized destination XML configuration. The receipt contains
+`source`, `destination`, `submittedSha256`, `configurationSha256`,
+`destinationSha256`, `accepted`, `verified`.
+Do not repeat a copy after an uncertain response; recover with
+`jkit job-config digest DEST --json` and compare the approved normalized digest.
+`jkit job-config get DEST --stdout` returns sensitive raw XML. These commands
+require task-specific authorization and never authorize subsequent builds.

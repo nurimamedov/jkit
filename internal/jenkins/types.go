@@ -399,3 +399,27 @@ type Artifact struct {
 	FileName     string `json:"fileName"`
 	RelativePath string `json:"relativePath"`
 }
+
+// AbortReceipt acknowledges a stop request, never a terminal build result.
+type AbortReceipt struct {
+	Job              string `json:"job"`
+	BuildNumber      int    `json:"buildNumber"`
+	Submitted        bool   `json:"submitted"`
+	AlreadyCompleted bool   `json:"alreadyCompleted"`
+}
+
+type JobConfigDigest struct {
+	Job                 string `json:"job"`
+	SHA256              string `json:"sha256"`
+	ConfigurationSHA256 string `json:"configurationSha256"`
+}
+
+type CopyJobReceipt struct {
+	ConfigurationSHA256 string `json:"configurationSha256"`
+	DestinationSHA256   string `json:"destinationSha256"`
+	Source              string `json:"source"`
+	Destination         string `json:"destination"`
+	SubmittedSHA256     string `json:"submittedSha256"`
+	Accepted            bool   `json:"accepted"`
+	Verified            bool   `json:"verified"`
+}

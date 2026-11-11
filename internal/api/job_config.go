@@ -31,7 +31,7 @@ func ValidateConfigXML(data []byte) error {
 	if len(data) == 0 || len(data) > MaxJobConfigBytes || !utf8.Valid(data) {
 		return invalid
 	}
-	decoder := xml.NewDecoder(bytes.NewReader(bytes.TrimPrefix(data, []byte{0xef, 0xbb, 0xbf})))
+	decoder := configXMLDecoder(data)
 	depth, roots, tokenIndex := 0, 0, 0
 	for {
 		token, err := decoder.Token()
@@ -66,6 +66,20 @@ func ValidateConfigXML(data []byte) error {
 		return invalid
 	}
 	return nil
+}
+
+// configXMLDecoder changes only the validation copy: Jenkins declares XML 1.1
+// even when its content fits 1.0. Unsupported control characters still fail.
+func configXMLDecoder(data []byte) *xml.Decoder {
+	data = bytes.TrimPrefix(data, []byte{0xef, 0xbb, 0xbf})
+	if bytes.HasPrefix(data, []byte("<?xml ")) {
+		if end := bytes.Index(data, []byte("?>")); end >= 0 {
+			head := bytes.ReplaceAll(data[:end], []byte(`version="1.1"`), []byte(`version="1.0"`))
+			head = bytes.ReplaceAll(head, []byte(`version='1.1'`), []byte(`version='1.0'`))
+			data = append(head, data[end:]...)
+		}
+	}
+	return xml.NewDecoder(bytes.NewReader(data))
 }
 
 // configClient isolates strict redirect and logging policy from legacy callers.

@@ -1170,7 +1170,24 @@ Defaults to the latest build. Checks if the build is running before sending the 
 jkit abort my-app              # abort latest build
 jkit abort my-app 42           # abort specific build
 jkit abort my-app 42 --wait    # abort and wait for it to stop
+jkit abort my-app 42 --json    # explicit machine receipt
 ```
+
+With `--json`, JOB and a positive canonical numeric BUILD are required;
+latest-build inference, URLs, `--branch`, `--wait`, `--format` and `--verbose`
+are rejected. The timeout covers the complete operation and must be positive
+and at most 120s. Exact job and build identities are checked before one stop
+POST. No mutation retries, crumb replay or redirects are followed. A 2xx or a
+302 pointing to that exact run acknowledges submission:
+
+```json
+{"job":"my-app","buildNumber":42,"submitted":true,"alreadyCompleted":false}
+```
+
+An already finished run produces `submitted:false, alreadyCompleted:true`
+without a POST. A receipt does not prove that a submitted stop completed.
+Read the numbered build afterwards. Uncertain failures require state recovery
+before any further mutation; never retry an abort automatically.
 
 ---
 
@@ -1926,13 +1943,17 @@ require an explicit natural job path; URLs and traversal syntax are rejected.
 
 ```sh
 jkit job-config get team/my-app --stdout
+jkit job-config digest team/my-app --json
 jkit job-config update team/my-app --stdin --json < candidate.xml
+jkit job-config copy team/my-app team/new-app --json --expected-sha256 HASH
 ```
 
 GET writes exact UTF-8 XML bytes only after the complete response passes the
 1 MiB limit and XML validation. UPDATE fully reads and validates at most 1 MiB
 from stdin before making any HTTP request. DTDs, custom entities, malformed XML
-and non-UTF-8 input are rejected. BOM, CRLF and non-ASCII content are preserved.
+and non-UTF-8 input are rejected. XML 1.1 declarations are accepted when the
+content is valid XML 1.0; unsupported control characters fail validation.
+BOM, declarations, CRLF and non-ASCII content are preserved byte for byte.
 Neither command writes files. The timeout covers stdin and all HTTP requests;
 it must be positive and at most 120 seconds. `--verbose`, `--format` and
 `--branch` are unsupported for this sensitive byte transport.
@@ -1950,9 +1971,43 @@ configuration. Read back and verify separately. After any uncertain update,
 reconcile current configuration before deciding whether to make another change.
 Raw exports can contain secrets and must be handled as sensitive data.
 
+COPY requires the lowercase SHA-256 of the approved source's exact XML.
+It checks exact job identities, the source hash and destination absence before
+creating the destination with one XML POST to its parent's `createItem`.
+Existing destinations are never overwritten. Only standalone freestyle and
+pipeline configurations without persisted automatic triggers are supported;
+managed branch jobs, folders, unsafe XML and nonempty trigger blocks are refused.
+No build is triggered. The source XML is submitted byte for byte, including its
+credential references and pipeline definition; review it before approval.
+
+COPY follows no redirects and never retries a POST, including after 403, 503 or
+a lost response. It checks the exact destination identity and normalized XML configuration before
+printing. Jenkins may change declaration quotes, escaping and indentation while
+storing a job. `submittedSha256` hashes the exact submitted source bytes;
+`destinationSha256` hashes the exact stored destination bytes. `configurationSha256`
+hashes a deterministic XML token representation: declaration form and structural
+indentation are ignored, attributes are sorted, while names/namespaces, comments,
+leaf/script text, mixed-content whitespace and CDATA contents are preserved.
+Equivalent entity escaping has the same normalized digest.
+
+A successful COPY prints:
+
+```json
+{"source":"team/my-app","destination":"team/new-app","submittedSha256":"<source SHA-256>","configurationSha256":"<normalized SHA-256>","destinationSha256":"<stored SHA-256>","accepted":true,"verified":true}
+```
+
+DIGEST makes one bounded configuration GET and prints
+`{"job":"team/my-app","sha256":"<exact SHA-256>","configurationSha256":"<normalized SHA-256>"}`.
+Store both source hashes before approval. If the POST or readback is uncertain,
+reconcile using `job-config digest DEST --json`; compare its `configurationSha256`
+with the approved source digest and do not repeat the create. `get DEST --stdout`
+still returns exact stored bytes. A successful receipt proves the observed
+configuration at readback time, not its later state. COPY uses the same XML
+size, timeout and sensitive-output restrictions as GET and UPDATE.
+
 ### Extended output safety
 
-The `0.10.1-ext.1` build masks secret-name and password input defaults and
+The `0.10.1-ext.2` build masks secret-name and password input defaults and
 submitted values in display output, including JSON/templates and validation hints.
 Wire values remain unchanged. Inspect diffs mask URL userinfo even in malformed
 URLs; raw `--xml` remains exact. XML reads are limited to 1 MiB. XML file exports

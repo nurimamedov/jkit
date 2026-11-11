@@ -19,7 +19,10 @@ func init() {
 	update := &cobra.Command{Use: "update JOB --stdin --json", Short: "Submit bounded job XML from stdin once", Args: cobra.ExactArgs(1), RunE: runJobConfig}
 	get.Flags().Bool("stdout", false, "Write exact XML bytes to stdout (1 MiB maximum)")
 	update.Flags().Bool("stdin", false, "Read exact XML bytes from stdin (1 MiB maximum)")
-	command.AddCommand(get, update)
+	copy := &cobra.Command{Use: "copy SOURCE DEST --json --expected-sha256 HASH", Short: "Create an absent job from approved exact XML once", Args: cobra.ExactArgs(2), RunE: runCopyJobConfig}
+	copy.Flags().String("expected-sha256", "", "Required SHA-256 of the approved exact source XML")
+	digest := &cobra.Command{Use: "digest JOB --json", Short: "Read exact and normalized configuration hashes", Args: cobra.ExactArgs(1), RunE: runDigestJobConfig}
+	command.AddCommand(get, update, copy, digest)
 	rootCmd.AddCommand(command)
 }
 
@@ -98,4 +101,65 @@ func readJobConfigStdin(ctx context.Context) ([]byte, error) {
 		}
 		return value.data, nil
 	}
+}
+
+func runCopyJobConfig(cmd *cobra.Command, args []string) error {
+	isJSON, _ := cmd.Flags().GetBool("json")
+	verbose, _ := cmd.Flags().GetBool("verbose")
+	format, _ := cmd.Flags().GetString("format")
+	branch, _ := cmd.Flags().GetString("branch")
+	if !isJSON || verbose || format != "" || branch != "" {
+		return fmt.Errorf("job-config copy requires --json without --verbose, --format or --branch")
+	}
+	for _, job := range args {
+		if err := api.ValidateConfigJob(job); err != nil {
+			return err
+		}
+	}
+	expected, _ := cmd.Flags().GetString("expected-sha256")
+	rawTimeout, _ := cmd.Flags().GetString("timeout")
+	timeout, err := time.ParseDuration(rawTimeout)
+	if err != nil || timeout <= 0 || timeout > 120*time.Second {
+		return fmt.Errorf("job-config timeout must be positive and at most 120s")
+	}
+	ctx, cancel := context.WithTimeout(cmd.Context(), timeout)
+	defer cancel()
+	client, _, err := clientFromCmd(cmd)
+	if err != nil {
+		return fmt.Errorf("cannot load Jenkins credentials for job configuration")
+	}
+	receipt, err := client.CopyJobConfig(ctx, args[0], args[1], expected)
+	if err != nil {
+		return err
+	}
+	return json.NewEncoder(os.Stdout).Encode(receipt)
+}
+
+func runDigestJobConfig(cmd *cobra.Command, args []string) error {
+	isJSON, _ := cmd.Flags().GetBool("json")
+	verbose, _ := cmd.Flags().GetBool("verbose")
+	format, _ := cmd.Flags().GetString("format")
+	branch, _ := cmd.Flags().GetString("branch")
+	if !isJSON || verbose || format != "" || branch != "" {
+		return fmt.Errorf("job-config digest requires --json without --verbose, --format or --branch")
+	}
+	if err := api.ValidateConfigJob(args[0]); err != nil {
+		return err
+	}
+	rawTimeout, _ := cmd.Flags().GetString("timeout")
+	timeout, err := time.ParseDuration(rawTimeout)
+	if err != nil || timeout <= 0 || timeout > 120*time.Second {
+		return fmt.Errorf("job-config timeout must be positive and at most 120s")
+	}
+	ctx, cancel := context.WithTimeout(cmd.Context(), timeout)
+	defer cancel()
+	client, _, err := clientFromCmd(cmd)
+	if err != nil {
+		return fmt.Errorf("cannot load Jenkins credentials for job configuration")
+	}
+	digest, err := client.DigestJobConfig(ctx, args[0])
+	if err != nil {
+		return err
+	}
+	return json.NewEncoder(os.Stdout).Encode(digest)
 }

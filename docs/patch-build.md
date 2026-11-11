@@ -1,10 +1,15 @@
 # Read correctness, queue receipt and job configuration patch
 
-Version: `0.10.1-ext.1`. Base: upstream `v0.10.1`
+Version: `0.10.1-ext.2`. Base: upstream `v0.10.1`
 (`997117ccf995c70d3d8fb3e902a4c1443455a679`). The five extended patches
 from `0.6.0-ext.4` are ported onto this release, preserving strict same-origin
 authentication, private credentials, safe downloads, qualified comparisons,
 queue receipts, bounded artifact stdout and exact-byte job configuration.
+The second extended patch adds explicit-number abort receipts and exact,
+SHA-256-preconditioned creation of absent standalone jobs, with no mutation
+retries and bounded identity/configuration readback. A configuration digest
+compares XML meaning across Jenkins serialization without altering exact reads
+or submitted source hashes.
 New upstream auth prune, input and inspect paths enforce the same private-file,
 masking and bounded XML policies.
 The module path and upstream MIT license are retained.
@@ -22,7 +27,7 @@ GOTOOLCHAIN=go1.26.0 GO111MODULE=on go test ./... -count=1
 gofmt -l .
 JENKINS_PORT=19091 COMPOSE_PROJECT_NAME=jkit0101upgrade GOTOOLCHAIN=go1.26.0 GO111MODULE=on make integration-test
 CGO_ENABLED=0 GOTOOLCHAIN=go1.26.0 GO111MODULE=on go build -trimpath \
-  -ldflags '-s -w -X github.com/ysmaoui/jkit/cmd.version=0.10.1-ext.1' \
+  -ldflags '-s -w -X github.com/ysmaoui/jkit/cmd.version=0.10.1-ext.2' \
   -o dist/jkit .
 dist/jkit --version
 go version -m dist/jkit
@@ -34,4 +39,4 @@ notices with binary packages. Do not reuse the version for different source.
 
 Keep the candidate beside the installed binary until deployment is approved.
 Wrappers that enforce exact backend versions need explicit compatibility with
-`0.10.1-ext.1`; reporting this build as unmodified `0.6.0` is incorrect.
+`0.10.1-ext.2`; reporting this build as unmodified `0.6.0` is incorrect.

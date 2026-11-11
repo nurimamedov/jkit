@@ -164,3 +164,9 @@ type StageAmbiguousError struct {
 func (e *StageAmbiguousError) Error() string {
 	return fmt.Sprintf("stage %q is ambiguous — matches multiple stages:\n  %s", e.Input, strings.Join(e.Matches, "\n  "))
 }
+
+// ControlError deliberately excludes server bodies and transport causes, which
+// can contain private job XML or credentials.
+type ControlError struct{ Message string }
+
+func (e *ControlError) Error() string { return e.Message }

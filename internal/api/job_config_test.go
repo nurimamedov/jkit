@@ -226,3 +226,14 @@ func TestJobConfigRejectsOversizedCrumbBeforePost(t *testing.T) {
 	require.Error(t, err)
 	assert.Zero(t, posts.Load())
 }
+
+func TestJobConfigXML11ValidationPreservesExactBytes(t *testing.T) {
+	data := []byte("\xef\xbb\xbf<?xml version='1.1' encoding='UTF-8'?>\r\n<project><description>version='1.1' &amp; Проверка</description><triggers/></project>\r\n")
+	original := bytes.Clone(data)
+	require.NoError(t, ValidateConfigXML(data))
+	require.NoError(t, ValidateCopyXML(data))
+	assert.Equal(t, original, data)
+	for _, invalid := range []string{"<?xml version='1.1'?><project>&#x1b;</project>", "<?xml version='1.1'?><project>\x1b</project>", "<?xml version='1.1'?><!DOCTYPE project><project/>"} {
+		assert.Error(t, ValidateConfigXML([]byte(invalid)))
+	}
+}

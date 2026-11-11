@@ -237,8 +237,37 @@ assert_contains "running --folder test-folder keeps it" "slow-pipeline" \
 assert_contains "running --folder test excludes it" "^\[\]$" \
     "$JK" running --json --folder test
 
-assert_success "abort slow-pipeline" \
-    "$JK" abort test-folder/slow-pipeline 1
+assert_contains "abort slow-pipeline explicit JSON receipt" '"submitted":true' \
+    "$JK" abort test-folder/slow-pipeline 1 --json
+
+assert_contains "abort finished build sends no signal" '"alreadyCompleted":true' \
+    "$JK" abort test-job 1 --json
+
+assert_success "human abort on finished build" \
+    "$JK" abort test-job 1
+
+# Exact configuration copy, only on this disposable Jenkins.
+echo ""
+echo "[job-config]"
+assert_success "read exact source XML" \
+    bash -c '"$1" job-config get test-job --stdout > "$2"' _ "$JK" "$WORK_DIR/source.xml"
+COPY_SHA256=$(shasum -a 256 "$WORK_DIR/source.xml" | cut -d ' ' -f 1)
+assert_contains "copy absent nested job and verify XML" '"verified":true' \
+    "$JK" job-config copy test-job test-folder/copied-job --json --expected-sha256 "$COPY_SHA256"
+assert_success "read exact copied XML" \
+    bash -c '"$1" job-config get test-folder/copied-job --stdout > "$2"' _ "$JK" "$WORK_DIR/destination.xml"
+assert_success "source normalized digest" \
+    bash -c '"$1" job-config digest test-job --json > "$2"' _ "$JK" "$WORK_DIR/source-digest.json"
+assert_success "destination normalized digest" \
+    bash -c '"$1" job-config digest test-folder/copied-job --json > "$2"' _ "$JK" "$WORK_DIR/destination-digest.json"
+SOURCE_CONFIGURATION_SHA256=$(sed -nE 's/.*"configurationSha256":"([a-f0-9]+)".*/\1/p' "$WORK_DIR/source-digest.json")
+DESTINATION_CONFIGURATION_SHA256=$(sed -nE 's/.*"configurationSha256":"([a-f0-9]+)".*/\1/p' "$WORK_DIR/destination-digest.json")
+assert_success "source configuration digest is present" \
+    test "${#SOURCE_CONFIGURATION_SHA256}" -eq 64
+assert_success "copied configuration matches source digest" \
+    test "$SOURCE_CONFIGURATION_SHA256" = "$DESTINATION_CONFIGURATION_SHA256"
+assert_fail "copy refuses existing destination" \
+    "$JK" job-config copy test-job test-folder/copied-job --json --expected-sha256 "$COPY_SHA256"
 
 # 9. Export. export-pipeline exports itself mid-run and archives the result.
 echo ""
