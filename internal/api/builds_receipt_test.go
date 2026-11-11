@@ -49,6 +49,10 @@ func TestTriggerReceiptLocation(t *testing.T) {
 			var calls atomic.Int32
 			var host string
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/job/demo/api/json") {
+					_, _ = io.WriteString(w, `{}`)
+					return
+				}
 				if strings.HasSuffix(r.URL.Path, "/crumbIssuer/api/json") {
 					w.WriteHeader(404)
 					return
@@ -59,13 +63,14 @@ func TestTriggerReceiptLocation(t *testing.T) {
 			}))
 			defer srv.Close()
 			host = srv.URL
-			id, err := NewClient(host+tc.prefix, "u", "t").TriggerBuild("demo", nil)
+			res, err := NewClient(host+tc.prefix, "u", "t").TriggerBuild("demo", nil)
 			if tc.valid {
 				require.NoError(t, err)
-				assert.Equal(t, 42, id)
+				require.NotNil(t, res)
+				assert.Equal(t, 42, res.QueueID)
 			} else {
 				assert.Error(t, err)
-				assert.Zero(t, id)
+				assert.Nil(t, res)
 				if err != nil {
 					assert.NotContains(t, err.Error(), "secret")
 				}
@@ -81,6 +86,10 @@ func TestTriggerBuildNeverReplaysMutation(t *testing.T) {
 			t.Run(fmt.Sprintf("%d/params=%t", code, params != nil), func(t *testing.T) {
 				var posts, redirected atomic.Int32
 				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/api/json") && !strings.Contains(r.URL.Path, "crumbIssuer") {
+						_, _ = io.WriteString(w, `{}`)
+						return
+					}
 					if r.URL.Path == "/crumbIssuer/api/json" {
 						_, _ = io.WriteString(w, `{"crumb":"c","crumbRequestField":"Jenkins-Crumb"}`)
 						return

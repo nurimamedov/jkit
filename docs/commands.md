@@ -1949,3 +1949,17 @@ This receipt acknowledges the HTTP request; it does not verify the stored
 configuration. Read back and verify separately. After any uncertain update,
 reconcile current configuration before deciding whether to make another change.
 Raw exports can contain secrets and must be handled as sensitive data.
+
+### Extended output safety
+
+The `0.10.1-ext.1` build masks secret-name and password input defaults and
+submitted values in display output, including JSON/templates and validation hints.
+Wire values remain unchanged. Inspect diffs mask URL userinfo even in malformed
+URLs; raw `--xml` remains exact. XML reads are limited to 1 MiB. XML file exports
+use atomic 0600 replacements and refuse file symlinks; recursive exports refuse
+symlinked children and stay within the selected output tree.
+`auth prune` uses the same private 0700 directory/0600 file, current-owner and
+no-symlink policy as login/status, including its backup and replacement.
+
+The no-agent informational note from `stages` appears only in human output;
+valid JSON/templates stay free of that diagnostic.

@@ -1,12 +1,12 @@
 # Read correctness, queue receipt and job configuration patch
 
-Version: `0.6.0-ext.4`. Base: upstream `v0.6.0`
-(`4b244fa169f08a6486f98b4a58886dfe229ea7e0`), plus the URL/build-target fix
-from `be09c680bdab7dec33ffa8684a86a51dcea6c427` and the read correctness patch.
-This candidate also includes the security patch from
-`b445c2c0eb0ca26cb4a9c52ff3dbf35dda60e3d1` and the bounded queue receipt API.
-This version adds bounded exact-byte job configuration reads and single-POST
-updates on top of `bf52411e874469f8e6b6acf15c2e618ebb87572f`.
+Version: `0.10.1-ext.1`. Base: upstream `v0.10.1`
+(`997117ccf995c70d3d8fb3e902a4c1443455a679`). The five extended patches
+from `0.6.0-ext.4` are ported onto this release, preserving strict same-origin
+authentication, private credentials, safe downloads, qualified comparisons,
+queue receipts, bounded artifact stdout and exact-byte job configuration.
+New upstream auth prune, input and inspect paths enforce the same private-file,
+masking and bounded XML policies.
 The module path and upstream MIT license are retained.
 
 Changes and compatibility behavior are documented in [commands.md](commands.md).
@@ -17,12 +17,12 @@ an unavailable comparison is not an empty comparison.
 Build from a clean, committed checkout:
 
 ```sh
-GO111MODULE=on go vet ./...
-GO111MODULE=on go test ./... -count=1
+GOTOOLCHAIN=go1.26.0 GO111MODULE=on go vet ./...
+GOTOOLCHAIN=go1.26.0 GO111MODULE=on go test ./... -count=1
 gofmt -l .
-make integration-test
-CGO_ENABLED=0 GO111MODULE=on go build -trimpath \
-  -ldflags '-s -w -X github.com/ysmaoui/jkit/cmd.version=0.6.0-ext.4' \
+JENKINS_PORT=19091 COMPOSE_PROJECT_NAME=jkit0101upgrade GOTOOLCHAIN=go1.26.0 GO111MODULE=on make integration-test
+CGO_ENABLED=0 GOTOOLCHAIN=go1.26.0 GO111MODULE=on go build -trimpath \
+  -ldflags '-s -w -X github.com/ysmaoui/jkit/cmd.version=0.10.1-ext.1' \
   -o dist/jkit .
 dist/jkit --version
 go version -m dist/jkit
@@ -34,4 +34,4 @@ notices with binary packages. Do not reuse the version for different source.
 
 Keep the candidate beside the installed binary until deployment is approved.
 Wrappers that enforce exact backend versions need explicit compatibility with
-`0.6.0-ext.4`; reporting this build as unmodified `0.6.0` is incorrect.
+`0.10.1-ext.1`; reporting this build as unmodified `0.6.0` is incorrect.

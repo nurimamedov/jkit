@@ -31,9 +31,12 @@ func (c *Client) GetJobConfigXML(jobPath string) ([]byte, error) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	data, err := io.ReadAll(resp.Body)
+	data, err := io.ReadAll(io.LimitReader(resp.Body, MaxJobConfigBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("reading job config.xml: %w", err)
+	}
+	if len(data) > MaxJobConfigBytes {
+		return nil, fmt.Errorf("job config.xml exceeds client limit of 1 MiB")
 	}
 	return data, nil
 }

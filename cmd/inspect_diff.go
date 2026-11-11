@@ -57,6 +57,12 @@ func runInspectDiff(cmd *cobra.Command, client *api.Client, jobPath string) erro
 		return err
 	}
 	diff := jenkins.DiffConfigRevisions(jobPath, from, to, oldConfig, newConfig)
+	for i := range diff.Hunks {
+		for j := range diff.Hunks[i].Lines {
+			line := &diff.Hunks[i].Lines[j]
+			line.Text = output.RedactURLCredentials(line.Text)
+		}
+	}
 
 	isJSON, _ := cmd.Flags().GetBool("json")
 	tmpl, _ := cmd.Flags().GetString("format")

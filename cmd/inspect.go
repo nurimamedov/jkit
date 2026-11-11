@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -445,7 +446,7 @@ func writeJobConfigXML(cmd *cobra.Command, client *api.Client, jobPath string) e
 		_, err = os.Stdout.Write(raw)
 		return err
 	}
-	if err := os.WriteFile(dest, raw, configFileMode); err != nil {
+	if _, err := output.SaveArtifact(dest, bytes.NewReader(raw)); err != nil {
 		return fmt.Errorf("writing %s: %w", dest, err)
 	}
 	_, _ = fmt.Fprintf(os.Stderr, "Wrote %s (%d bytes)\n", dest, len(raw))

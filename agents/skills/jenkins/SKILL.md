@@ -486,3 +486,12 @@ When a build is BUILDING but appears stuck:
 | `stage "X" has not started yet (build #N is running); stages so far: ...` | X is not in the stage list yet. If X is not a typo of a listed stage, the build has not reached it: use `log --stage X -f` or `jkit wait URL --stage X` to wait for it. Once the build ends, a stage that never ran is `stage "X" not found` |
 | `node "ID" not found` | `--stage-id` got an ID that is neither a stage in `jkit stages` nor a step with output. Take the ID from `jkit stages` |
 | `stage "X" is ambiguous` | Same name in multiple parallel branches — re-run with the qualified path (`--stage "Branch/X"`) or the ID from `jkit stages` (`--stage <id>`) |
+
+## Extended transport extensions
+
+`jkit job-config get JOB --stdout` reads exact UTF-8 XML up to 1 MiB.
+`jkit job-config update JOB --stdin --json` submits one bounded XML POST without
+redirects or retries; the receipt is an acknowledgement, not readback verification.
+`jkit queue --id ID --json` reads a queue receipt. `jkit run JOB --json` returns a
+submission receipt without waiting; it cannot combine with --wait or --log.
+`jkit artifacts JOB BUILD --download NAME --stdout` emits exact bytes up to 64 KiB.

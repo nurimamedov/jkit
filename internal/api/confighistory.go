@@ -91,12 +91,15 @@ func (c *Client) GetJobConfigRevision(jobPath, timestamp string) ([]byte, error)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	data, err := io.ReadAll(resp.Body)
+	data, err := io.ReadAll(io.LimitReader(resp.Body, MaxJobConfigBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("reading revision %s of %s: %w", timestamp, jobPath, err)
 	}
 	if len(bytes.TrimSpace(data)) == 0 {
 		return nil, fmt.Errorf("%s has no stored configuration at %s: the plugin answers with an empty body for a timestamp it does not hold, and for an entry whose config it no longer keeps — jkit inspect %s --history lists the timestamps it does have", jobPath, timestamp, jobPath)
+	}
+	if len(data) > MaxJobConfigBytes {
+		return nil, fmt.Errorf("job config.xml exceeds client limit of 1 MiB")
 	}
 	return data, nil
 }

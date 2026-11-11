@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/ysmaoui/jkit/internal/api"
 	"github.com/ysmaoui/jkit/internal/jenkins"
+	"github.com/ysmaoui/jkit/internal/output"
 )
 
 // checkExportFlags rejects the --recursive combinations cobra cannot express.
@@ -52,14 +54,37 @@ func exportJobConfigs(client *api.Client, jobPath, dir string, warn io.Writer) e
 	if err != nil {
 		return err
 	}
-	e := &configExport{client: client}
-	e.write(jobPath, dir)
-	e.walk(jobPath, dir, tree)
+	if err := os.MkdirAll(dir, configDirMode); err != nil {
+		return err
+	}
+	info, err := os.Lstat(dir)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("export directory must be a real directory")
+	}
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	opened, err := root.Stat(".")
+	if err != nil {
+		return err
+	}
+	if !os.SameFile(info, opened) {
+		return fmt.Errorf("export directory changed while opening")
+	}
+	e := &configExport{client: client, root: root}
+	e.write(jobPath, ".")
+	e.walk(jobPath, ".", tree)
 	return e.report(dir, warn)
 }
 
 type configExport struct {
 	client  *api.Client
+	root    *os.Root
 	files   int
 	bytes   int
 	skipped []string
@@ -84,13 +109,8 @@ func (e *configExport) write(jobPath, dir string) {
 		e.skip(jobPath, err)
 		return
 	}
-	if err := os.MkdirAll(dir, configDirMode); err != nil {
+	if err := e.save(dir, raw); err != nil {
 		e.skip(jobPath, err)
-		return
-	}
-	dest := filepath.Join(dir, "config.xml")
-	if err := os.WriteFile(dest, raw, configFileMode); err != nil {
-		e.skip(jobPath, fmt.Errorf("writing %s: %w", dest, err))
 		return
 	}
 	e.files++
@@ -140,4 +160,39 @@ func checkJobName(name string) error {
 		return fmt.Errorf("the name %q contains a path separator, which would write outside the output directory", name)
 	}
 	return nil
+}
+
+// Open each child separately so an existing symlink cannot redirect an export.
+func (e *configExport) save(dir string, raw []byte) error {
+	root := e.root
+	for _, part := range strings.Split(filepath.ToSlash(dir), "/") {
+		if part == "." {
+			continue
+		}
+		if err := root.Mkdir(part, configDirMode); err != nil && !os.IsExist(err) {
+			return err
+		}
+		info, err := root.Lstat(part)
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("export child must be a real directory")
+		}
+		next, err := root.OpenRoot(part)
+		if err != nil {
+			return err
+		}
+		defer next.Close()
+		opened, err := next.Stat(".")
+		if err != nil {
+			return err
+		}
+		if !os.SameFile(info, opened) {
+			return fmt.Errorf("export child changed while opening")
+		}
+		root = next
+	}
+	_, err := output.SaveArtifactAt(root, "config.xml", bytes.NewReader(raw))
+	return err
 }

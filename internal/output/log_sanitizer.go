@@ -1,7 +1,6 @@
 package output
 
 import (
-	"net/url"
 	"regexp"
 	"strings"
 )
@@ -43,18 +42,11 @@ const urlCredentialMask = "***"
 // directly as https://user:token@host/repo.git. scp-style git remotes
 // (git@host:org/repo.git) carry no userinfo in the URL sense and are left
 // alone; the "git" there is a conventional account name, not a secret.
+var urlUserinfo = regexp.MustCompile(`([A-Za-z][A-Za-z0-9+.-]*://)[^/?#\s<>]*@`)
+
 func RedactURLCredentials(raw string) string {
-	u, err := url.Parse(raw)
-	if err != nil || u.User == nil {
-		return raw
-	}
-	u.User = nil
-	stripped := u.String()
-	prefix := u.Scheme + "://"
-	if !strings.HasPrefix(stripped, prefix) {
-		return stripped
-	}
-	return prefix + urlCredentialMask + "@" + stripped[len(prefix):]
+	// Match userinfo independently of path parsing; malformed escapes must not expose it.
+	return urlUserinfo.ReplaceAllString(raw, "${1}"+urlCredentialMask+"@")
 }
 
 // ansiEscapeRe matches CSI sequences (\x1b[...) and OSC strings (\x1b]...BEL

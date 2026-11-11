@@ -138,11 +138,11 @@ func runStages(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	warnIfNoAgents(os.Stderr, infos)
-
 	if isJSON || tmpl != "" {
 		return f.Output(infos, nil)
 	}
+
+	warnIfNoAgents(os.Stderr, infos)
 
 	items := make([]any, len(infos))
 	for i := range infos {

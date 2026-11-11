@@ -1,9 +1,11 @@
 package api
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -91,4 +93,18 @@ func TestGetJobConfigXMLNotFound(t *testing.T) {
 	var nfe *jenkins.NotFoundError
 	require.ErrorAs(t, err, &nfe)
 	assert.Equal(t, "team/nope", nfe.Name)
+}
+
+func TestConfigReadsRejectOversizeXML(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, strings.Repeat("x", MaxJobConfigBytes+1))
+	}))
+	defer srv.Close()
+	client := NewClient(srv.URL, "u", "t")
+	data, err := client.GetJobConfigXML("demo")
+	require.Error(t, err)
+	require.Nil(t, data)
+	data, err = client.GetJobConfigRevision("demo", "2026-08-27_14-58-13")
+	require.Error(t, err)
+	require.Nil(t, data)
 }

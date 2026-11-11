@@ -17,7 +17,14 @@ func SaveArtifact(path string, body io.Reader) (int64, error) {
 		return 0, fmt.Errorf("opening output directory: %w", err)
 	}
 	defer root.Close()
-	name := filepath.Base(path)
+	return SaveArtifactAt(root, filepath.Base(path), body)
+}
+
+// SaveArtifactAt writes within an already anchored output directory.
+func SaveArtifactAt(root *os.Root, name string, body io.Reader) (int64, error) {
+	if filepath.Base(name) != name {
+		return 0, errors.New("artifact name must be a single directory entry")
+	}
 	if err := checkArtifactDestination(root, name); err != nil {
 		return 0, err
 	}

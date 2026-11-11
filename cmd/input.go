@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 
@@ -87,7 +89,10 @@ func listInputs(cmd *cobra.Command, jobPath string, buildNum int, state *jenkins
 	if isJSON || tmpl != "" {
 		// Always a list, never null: a build with nothing pending is the common
 		// case and a script filtering the output should not have to special-case it.
-		pending := state.Pending
+		pending := make([]jenkins.PendingInput, len(state.Pending))
+		for i, in := range state.Pending {
+			pending[i] = maskInputDefaults(in)
+		}
 		if pending == nil {
 			pending = []jenkins.PendingInput{}
 		}
@@ -227,6 +232,7 @@ func parseInputParams(raw []string) (map[string]string, error) {
 // their defaults, so every declared parameter has to arrive explicitly; the
 // error prints the ready-made command rather than only naming the problem.
 func checkApproveParams(in jenkins.PendingInput, params map[string]string, jobPath string, buildNum int) error {
+	in = maskInputDefaults(in)
 	for name := range params {
 		if _, ok := in.Parameter(name); !ok {
 			return fmt.Errorf("input %q declares no parameter %q — declared: %s",
@@ -249,7 +255,7 @@ func checkApproveParams(in jenkins.PendingInput, params map[string]string, jobPa
 	b.WriteString("Approving without them would submit the defaults Jenkins holds, which is not the same as agreeing to them.\n")
 	b.WriteString("Declared parameters:\n")
 	for _, d := range in.Parameters {
-		def := d.DefaultString()
+		def := maskInputValue(in, d.Name, d.DefaultString())
 		if def == "" {
 			def = "(none)"
 		}
@@ -261,7 +267,7 @@ func checkApproveParams(in jenkins.PendingInput, params map[string]string, jobPa
 	}
 	fmt.Fprintf(&b, "Pass every value explicitly:\n  jkit input %s %d --approve --id %s", jobPath, buildNum, in.ID)
 	for _, d := range in.Parameters {
-		v := params[d.Name]
+		v := maskInputValue(in, d.Name, params[d.Name])
 		if v == "" {
 			v = "<value>"
 		}
@@ -271,6 +277,12 @@ func checkApproveParams(in jenkins.PendingInput, params map[string]string, jobPa
 }
 
 func reportDecision(cmd *cobra.Command, action, jobPath string, buildNum int, in jenkins.PendingInput, params map[string]string) error {
+	safeParams := make(map[string]string, len(params))
+	for k, v := range params {
+		safeParams[k] = maskInputValue(in, k, v)
+	}
+	params = safeParams
+
 	isJSON, _ := cmd.Flags().GetBool("json")
 	tmpl, _ := cmd.Flags().GetString("format")
 	if isJSON || tmpl != "" {
@@ -308,4 +320,29 @@ func reportDecision(cmd *cobra.Command, action, jobPath string, buildNum int, in
 		_, _ = fmt.Fprintln(os.Stderr, "The build fails the input step and normally aborts from here.")
 	}
 	return nil
+}
+
+func maskInputValue(in jenkins.PendingInput, name, value string) string {
+	d, _ := in.Parameter(name)
+	if d.IsSecret() {
+		return output.MaskSecret(value)
+	}
+	return output.MaskParameter(name, value)
+}
+
+func maskInputDefaults(in jenkins.PendingInput) jenkins.PendingInput {
+	in.Parameters = slices.Clone(in.Parameters)
+	for i := range in.Parameters {
+		d := &in.Parameters[i]
+		if d.IsSecret() || output.IsSecretKey(d.Name) {
+			if d.Default != nil {
+				raw, _ := json.Marshal(output.MaskSecret(d.Default.String()))
+				d.Default = &jenkins.ParameterValue{RawValue: raw}
+			}
+			if len(d.RawChoices) > 0 {
+				d.RawChoices = json.RawMessage(`[]`)
+			}
+		}
+	}
+	return in
 }

@@ -79,7 +79,7 @@ func (c *Client) configClient() (*Client, error) {
 			return nil, fmt.Errorf("invalid configured Jenkins context path")
 		}
 	}
-	scoped := *c
+	scoped := &Client{host: c.host, user: c.user, token: c.token}
 	client := *c.httpClient
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	// Sensitive configuration commands never emit transport error text.
@@ -87,9 +87,9 @@ func (c *Client) configClient() (*Client, error) {
 		client.Transport = verbose.base
 	}
 	scoped.httpClient = &client
-	scoped.crumbs = newCrumbIssuer(&scoped)
+	scoped.crumbs = newCrumbIssuer(scoped)
 	scoped.crumbs.maxBytes = MaxJobConfigBytes
-	return &scoped, nil
+	return scoped, nil
 }
 
 func (c *Client) GetJobConfig(ctx context.Context, job string) ([]byte, error) {
