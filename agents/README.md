@@ -47,7 +47,8 @@ See [scripting and exit codes](../docs/scripting.md).
 | --- | --- | --- |
 | Submit build | `build` | `run` |
 | Test report | `tests` | `test` |
-| Failure diagnosis | `triage` | `diagnose` |
+| Failure diagnosis | `diagnose` (sampled leads, includes SUCCESS) / `triage` (baseline comparison) | `diagnose` |
+| Stage history across recent builds | `history --build-limit 5` | `history --limit 5` (trend summary) |
 | Completion check | `wait --timeout 120` | `wait --max-wait 2m` |
 | Recover uncertain write | saved operation ID / idempotency key | no jx journal |
 
@@ -56,6 +57,11 @@ jx recovery into a fresh `jkit run`, config update or copy: a lost response can
 already have changed Jenkins. Do not expose auth config, tokens, raw XML or
 unbounded logs as diagnostics. A tool's installed skill is not permission to
 mutate Jenkins or delegate work.
+
+The jx guide documents bounded `log --head`/`--tail`, exact `--stage-id`, literal
+OR search (`--any-of`) and `--ignore-case`. Those jx options are not a command
+translation table for jkit. In jx, diagnose signature categories remain tentative;
+history has explicit absent/unavailable cells and does not sum overlapping stages.
 
 ## What's here
 

@@ -17,6 +17,8 @@ workspace use its `jx` wrapper first; read the jx agent guide there.
 This repository implements the lower-level `jkit` backend, with different JSON
 and exit semantics. `jkit run` corresponds to `jx build`; `jkit test` to `jx tests`.
 Direct backend writes do not inherit jx approvals or its durable journal.
+For jx diagnose/history and log selection flags, consult the installed shared
+guide; backend diagnose skips SUCCESS and backend history is a trend summary.
 
 For this extended branch read [docs/patch-build.md](docs/patch-build.md).
 Do not replace its measured backend with upstream `@latest` during jx setup.
