@@ -10,6 +10,19 @@ Guidance for AI coding agents working on this repo.
 3. Read [docs/DESIGN.md](docs/DESIGN.md) for architecture, error model, and
    output conventions.
 
+## Using Jenkins tooling
+
+Read [agents/README.md](agents/README.md) before operating Jenkins. In an product
+workspace use its `jx` wrapper first; read the jx agent guide there.
+This repository implements the lower-level `jkit` backend, with different JSON
+and exit semantics. `jkit run` corresponds to `jx build`; `jkit test` to `jx tests`.
+Direct backend writes do not inherit jx approvals or its durable journal.
+
+For this extended branch read [docs/patch-build.md](docs/patch-build.md).
+Do not replace its measured backend with upstream `@latest` during jx setup.
+Read `jkit COMMAND --help` and [docs/scripting.md](docs/scripting.md) for the
+actual version's flags and exit codes. Repository help needs no authentication.
+
 ## Conventions
 
 - `cmd/` is Cobra plumbing only. Business logic lives in `internal/`.

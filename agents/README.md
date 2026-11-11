@@ -6,11 +6,62 @@ skill, a slash command, and a sub-agent. Authored for
 prompts and workflows transfer cleanly to other agent runtimes that accept
 free-form system prompts.
 
+## Codex and Claude Code quickstart
+
+When working in this checkout, Codex reads root `AGENTS.md`; root `CLAUDE.md`
+imports those same instructions for Claude Code. Read this file and
+[the command reference](../docs/commands.md) for usage. These Markdown files
+need no skill installation. Optional copied skills are not automatically
+kept in sync with this checkout.
+
+For product operations use the workspace **jx** wrapper first, and read its
+the jx agent guide. PATH `jx` is that
+launcher, not Jenkins X / JayeX; `jkit 0.10.1-ext.2` is its pinned Go backend.
+The [extended build notes](../docs/patch-build.md) describe the extensions.
+Upstream `go install ...@latest` does not provide that measured artifact.
+
+For direct jkit usage outside that workspace, start with local discovery:
+
+```sh
+jkit --version
+jkit --help
+jkit status --help
+jkit wait --help
+```
+
+Then use explicit job/build selection and configured authentication for reads:
+
+```sh
+jkit status team/example 42 --json
+jkit stages team/example 42 --json
+jkit sources team/example 42 --json
+```
+
+These targets are examples. Read `building` before `result`: Jenkins can report
+SUCCESS on an in-progress build. Direct `jkit` JSON is command-specific, not a
+jx protocol envelope; `jkit log` emits text. `jkit wait` / `run --wait` encode
+build outcomes in exit codes, unlike a successful jx read of a failed build.
+See [scripting and exit codes](../docs/scripting.md).
+
+| Task | jx | jkit |
+| --- | --- | --- |
+| Submit build | `build` | `run` |
+| Test report | `tests` | `test` |
+| Failure diagnosis | `triage` | `diagnose` |
+| Completion check | `wait --timeout 120` | `wait --max-wait 2m` |
+| Recover uncertain write | saved operation ID / idempotency key | no jx journal |
+
+Jenkins writes require authorization for that concrete action. Do not translate
+jx recovery into a fresh `jkit run`, config update or copy: a lost response can
+already have changed Jenkins. Do not expose auth config, tokens, raw XML or
+unbounded logs as diagnostics. A tool's installed skill is not permission to
+mutate Jenkins or delegate work.
+
 ## What's here
 
 | Path | Type | Purpose |
 |---|---|---|
-| [`skills/jenkins/SKILL.md`](skills/jenkins/SKILL.md) | Skill | Reference for the full `jkit` command surface — auto-loaded when the agent reasons about Jenkins. |
+| [`skills/jenkins/SKILL.md`](skills/jenkins/SKILL.md) | Skill | Optional command reference; available after installing the skill in the agent runtime. |
 | [`commands/jenkins-monitor.md`](commands/jenkins-monitor.md) | Slash command | `/jenkins-monitor URL` — wait for a build, then summarize the result (with `jkit diagnose` on failure). |
 | [`subagents/jenkins-build-analyzer.md`](subagents/jenkins-build-analyzer.md) | Sub-agent | Specialized failure-triage agent. Delegated to from the main thread when the user asks "why did the build fail?". |
 

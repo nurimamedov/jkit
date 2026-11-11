@@ -30,6 +30,14 @@ jkit open my-app                 # open in browser
 jkit api /api/json               # raw authenticated API request, like gh api
 ```
 
+## Extended product build
+
+This branch supplies `0.10.1-ext.2` for the workspace `jx` wrapper. Read
+[build/pinning notes](docs/patch-build.md) before installing or upgrading it.
+The upstream installation commands below do not reproduce the measured
+extended backend. Codex and Claude Code start with [AGENTS.md](AGENTS.md)
+and [agent integration](agents/README.md).
+
 ## Install
 
 From source (Go 1.26+):
