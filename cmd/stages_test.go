@@ -150,6 +150,9 @@ func TestStagesJSONAddsElapsedOnlyForRunningStage(t *testing.T) {
 	require.Len(t, stages, 2)
 	assert.NotContains(t, stages[0], "elapsedMillis")
 	assert.EqualValues(t, 5000, stages[0]["durationMillis"])
+	assert.EqualValues(t, elapsedNowMillis-300_000, stages[0]["startTimeMillis"])
+	assert.EqualValues(t, elapsedNowMillis-125_000, stages[1]["startTimeMillis"])
+	assert.Equal(t, true, stages[0]["graphIncomplete"])
 	assert.EqualValues(t, 125_000, stages[1]["elapsedMillis"])
 	assert.EqualValues(t, 0, stages[1]["durationMillis"])
 }
@@ -165,7 +168,7 @@ func TestStagesJSONAddsElapsedForBlueOceanRunningStage(t *testing.T) {
 		}
 		_ = json.NewEncoder(w).Encode([]map[string]any{
 			{"id": "6", "displayName": "Build", "type": "STAGE", "state": "FINISHED", "result": "SUCCESS", "durationInMillis": 5000},
-			{"id": "7", "displayName": "Test", "type": "STAGE", "state": "RUNNING", "result": "UNKNOWN", "durationInMillis": 125_000},
+			{"id": "7", "displayName": "Test", "type": "STAGE", "state": "RUNNING", "result": "UNKNOWN", "durationInMillis": 125_000, "startTime": "2023-11-14T22:11:15.123+0000"},
 		})
 	}))
 	defer srv.Close()
@@ -178,6 +181,8 @@ func TestStagesJSONAddsElapsedForBlueOceanRunningStage(t *testing.T) {
 	assert.NotContains(t, stages[0], "elapsedMillis")
 	assert.EqualValues(t, 125_000, stages[1]["elapsedMillis"])
 	assert.EqualValues(t, 125_000, stages[1]["durationMillis"])
+	assert.EqualValues(t, 1699999875123, stages[1]["startTimeMillis"])
+	assert.NotContains(t, stages[0], "startTimeMillis")
 }
 
 func TestStagesJSONElapsedForPausedQueuedAndStartlessStages(t *testing.T) {

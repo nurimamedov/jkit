@@ -80,6 +80,9 @@ func (c *Client) getPipelineStagesPGV(jobPath string, number int) ([]jenkins.Sta
 	// Non-nil even when empty: nil from GetPipelineStages means "no stage
 	// data", and a pipeline that has not entered its first stage is not that.
 	stages := jenkins.FlattenPGVTree(pgv.Data.Stages)
+	for i := range stages {
+		stages[i].GraphIncomplete = !pgv.Data.Complete
+	}
 	if stages == nil {
 		stages = []jenkins.Stage{}
 	}

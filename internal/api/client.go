@@ -10,6 +10,7 @@ import (
 	"math"
 	"net/http"
 	"net/http/cookiejar"
+	"net/http/httptrace"
 	"net/url"
 	"os"
 	"strconv"
@@ -327,6 +328,10 @@ func (c *Client) PostOnceContext(ctx context.Context, path string, body io.Reade
 
 // postOnceResponseContext leaves status interpretation to a control endpoint.
 func (c *Client) postOnceResponseContext(ctx context.Context, path string, body io.Reader, contentType string) (*http.Response, error) {
+	return c.postOnceTraced(ctx, path, body, contentType, nil)
+}
+
+func (c *Client) postOnceTraced(ctx context.Context, path string, body io.Reader, contentType string, trace *httptrace.ClientTrace) (*http.Response, error) {
 	crumb, err := c.crumbs.ensureCrumbContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("obtaining crumb: %w", err)
@@ -336,6 +341,9 @@ func (c *Client) postOnceResponseContext(ctx context.Context, path string, body 
 	}
 	// Keep Body non-nil and GetBody unset, including for an empty form. This
 	// prevents the transport from treating this mutation as replayable.
+	if trace != nil {
+		ctx = httptrace.WithClientTrace(ctx, trace)
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.host+path, io.NopCloser(body))
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)

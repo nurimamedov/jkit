@@ -16,7 +16,7 @@ kept in sync with this checkout.
 
 For product operations use the workspace **jx** wrapper first, and read its
 the jx agent guide. PATH `jx` is that
-launcher, not Jenkins X / JayeX; `jkit 0.10.1-ext.2` is its pinned Go backend.
+launcher, not Jenkins X / JayeX; `jkit 0.10.1-ext.3` is its pinned Go backend.
 The [extended build notes](../docs/patch-build.md) describe the extensions.
 Upstream `go install ...@latest` does not provide that measured artifact.
 

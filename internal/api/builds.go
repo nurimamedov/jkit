@@ -1,14 +1,17 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"github.com/ysmaoui/jkit/internal/jenkins"
 )
@@ -223,6 +226,17 @@ type TriggerResult struct {
 	OrgFolder bool
 }
 
+// SubmissionError preserves the phase and the bounded HTTP response from the one POST.
+type SubmissionError struct {
+	Phase  string `json:"phase"`
+	Status int    `json:"httpStatus,omitempty"`
+	Body   string `json:"responseBody,omitempty"`
+	Cause  error  `json:"-"`
+}
+
+func (e *SubmissionError) Error() string { return e.Cause.Error() }
+func (e *SubmissionError) Unwrap() error { return e.Cause }
+
 // TriggerBuild queues a build, or starts a scan on a multibranch pipeline or
 // organization folder. On a parameterized job Jenkins answers a bare POST /build
 // with 400 "Nothing is submitted" (it expects the UI's json form), while
@@ -232,12 +246,22 @@ type TriggerResult struct {
 // executes properties(). With params the job is not looked up first: a branch
 // source has no /buildWithParameters, and only that failure pays for the lookup.
 func (c *Client) TriggerBuild(jobPath string, params map[string]string) (*TriggerResult, error) {
+	return c.triggerBuild(jobPath, params, true)
+}
+
+// TriggerBuildReport returns HTTP refusals immediately so a later explanatory GET
+// cannot consume the caller's deadline and obscure an already definite rejection.
+func (c *Client) TriggerBuildReport(jobPath string, params map[string]string) (*TriggerResult, error) {
+	return c.triggerBuild(jobPath, params, false)
+}
+
+func (c *Client) triggerBuild(jobPath string, params map[string]string, explain bool) (*TriggerResult, error) {
 	parameterized := len(params) > 0
 	indexing, orgFolder := false, false
 	if !parameterized {
 		class, defs, err := c.getJobClassAndParameters(jobPath)
 		if err != nil {
-			return nil, fmt.Errorf("triggering build: %w", err)
+			return nil, &SubmissionError{Phase: "before_post", Cause: fmt.Errorf("triggering build: %w", err)}
 		}
 		job := jenkins.Job{Class: class}
 		indexing, orgFolder = job.IsBranchSource(), job.IsOrgFolder()
@@ -260,24 +284,50 @@ func (c *Client) TriggerBuild(jobPath string, params map[string]string) (*Trigge
 		path += "/build"
 	}
 
-	resp, err := c.PostOnce(path, body, contentType)
+	var connected atomic.Bool
+	trace := &httptrace.ClientTrace{GotConn: func(info httptrace.GotConnInfo) {
+		if info.Conn != nil {
+			connected.Store(true)
+		}
+	}}
+	// Trace only the POST connection, after crumb retrieval.
+	ctx := context.Background()
+	resp, err := c.postOnceTraced(ctx, path, body, contentType, trace)
 	if err != nil {
+		phase := "before_post"
+		if connected.Load() {
+			phase = "post_transport"
+		}
+		return nil, &SubmissionError{Phase: phase, Cause: fmt.Errorf("triggering build: %w", err)}
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		sample, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		_ = resp.Body.Close()
+		err = StatusError(resp, sample)
+		rejected := &SubmissionError{Phase: "response", Status: resp.StatusCode, Body: string(sample), Cause: err}
+		if !explain {
+			return nil, rejected
+		}
+		wrap := func(cause error) error {
+			rejected.Cause = cause
+			return rejected
+		}
 		var srvErr *jenkins.ServerError
 		var nfErr *jenkins.NotFoundError
 		switch {
 		case errors.As(err, &srvErr) && srvErr.StatusCode == http.StatusBadRequest:
-			return nil, c.explainRejectedTrigger(jobPath, params, err)
+			return nil, wrap(c.explainRejectedTrigger(jobPath, params, err))
 		case len(params) > 0 && (errors.As(err, &nfErr) || errors.As(err, &srvErr) && srvErr.StatusCode == http.StatusMethodNotAllowed):
 			if class, _, lookupErr := c.getJobClassAndParameters(jobPath); lookupErr == nil {
 				switch job := (jenkins.Job{Class: class}); {
 				case job.IsOrgFolder():
-					return nil, fmt.Errorf("%s is an organization folder and takes no parameters; target a branch job (%s/<repo>/<branch>) to set parameters", jobPath, jobPath)
+					return nil, wrap(fmt.Errorf("%s is an organization folder and takes no parameters; target a branch job (%s/<repo>/<branch>) to set parameters", jobPath, jobPath))
 				case job.IsMultibranch():
-					return nil, fmt.Errorf("%s is a multibranch project and takes no parameters; target a branch job (%s/<branch>) to set parameters", jobPath, jobPath)
+					return nil, wrap(fmt.Errorf("%s is a multibranch project and takes no parameters; target a branch job (%s/<branch>) to set parameters", jobPath, jobPath))
 				}
 			}
 		}
-		return nil, fmt.Errorf("triggering build: %w", err)
+		return nil, wrap(fmt.Errorf("triggering build: %w", err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -286,7 +336,7 @@ func (c *Client) TriggerBuild(jobPath string, params map[string]string) (*Trigge
 	}
 	id, err := c.queueIDFromLocation(resp.Header.Get("Location"))
 	if err != nil {
-		return nil, err
+		return nil, &SubmissionError{Phase: "receipt", Status: resp.StatusCode, Cause: err}
 	}
 	return &TriggerResult{QueueID: id}, nil
 }

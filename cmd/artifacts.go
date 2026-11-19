@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -26,6 +27,7 @@ func init() {
 	artifactsCmd.Flags().Bool("stdout", false, "Write one exact artifact to stdout (64 KiB maximum; requires explicit build)")
 	artifactsCmd.Flags().StringP("download", "d", "", "Download artifact by filename")
 	artifactsCmd.Flags().StringP("output", "o", "", "Output file path (default: current dir with original filename)")
+	artifactsCmd.Flags().String("output-dir", "", "Download exact relative path into this directory (512 MiB maximum; requires explicit build)")
 	rootCmd.AddCommand(artifactsCmd)
 }
 
@@ -47,6 +49,25 @@ func runArtifacts(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if cmd.Flags().Changed("output-dir") {
+		dir, _ := cmd.Flags().GetString("output-dir")
+		if dir == "" || stdout || cmd.Flags().Changed("output") || downloadName == "" {
+			return fmt.Errorf("--output-dir requires --download and cannot be combined with --stdout or --output")
+		}
+		body, err := client.OpenArtifactFile(cmd.Context(), jobPath, buildNum, downloadName)
+		if err != nil {
+			return err
+		}
+		defer body.Close()
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			return err
+		}
+		n, err := output.SaveArtifact(filepath.Join(dir, filepath.Base(downloadName)), body)
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(cmd.OutOrStdout()).Encode(map[string]int64{"downloadedBytes": n})
+	}
 	if stdout {
 		data, err := client.ReadArtifactBounded(jobPath, buildNum, downloadName)
 		if err != nil {

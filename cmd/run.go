@@ -2,7 +2,9 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/ysmaoui/jkit/internal/api"
 	"os"
 	"strings"
 	"time"
@@ -27,6 +29,7 @@ var runCmd = &cobra.Command{
 
 func init() {
 	runCmd.Flags().StringArrayP("param", "p", nil, "Build parameter (KEY=VALUE)")
+	runCmd.Flags().Bool("submission-report", false, "Emit structured submission diagnostics with --json")
 	runCmd.Flags().Bool("wait", false, "Wait for build to complete")
 	runCmd.Flags().Bool("log", false, "Stream build log (implies --wait)")
 	withResultExit(runCmd)
@@ -62,8 +65,17 @@ func runRun(cmd *cobra.Command, args []string) error {
 	}
 
 	// Trigger
-	res, err := client.TriggerBuild(jobPath, params)
+	report, _ := cmd.Flags().GetBool("submission-report")
+	trigger := client.TriggerBuild
+	if report && isJSON {
+		trigger = client.TriggerBuildReport
+	}
+	res, err := trigger(jobPath, params)
 	if err != nil {
+		var failure *api.SubmissionError
+		if report && isJSON && errors.As(err, &failure) {
+			_ = json.NewEncoder(os.Stdout).Encode(failure)
+		}
 		return err
 	}
 	if res.Indexing {

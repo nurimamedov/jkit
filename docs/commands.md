@@ -749,6 +749,7 @@ jkit run [job] [-p KEY=VALUE]... [--wait] [--log]
 | `--wait` | Wait for build to complete |
 | `--log` | Stream build log (implies `--wait`) |
 | `--json` | Print a queue receipt; incompatible with `--wait` and `--log` |
+| `--submission-report` | With `--json`, emit the failing submission phase, HTTP status and up to 1024 bytes of the response body. Treat this transport diagnostic as private. |
 
 `run my-app --json` writes only a receipt to stdout:
 
@@ -1389,6 +1390,12 @@ jkit artifacts [job] [build#] [-d FILENAME] [-o PATH]
 | `--stdout` | Read one exact relative path to stdout, at most 64 KiB |
 
 Defaults to the latest build. Without `-d`, lists artifacts as a table.
+
+`--download PATH --output-dir DIR` requires an explicit build and uses the
+exact artifact-relative path. It saves DIR/basename(PATH) with an atomic
+replacement and a 512 MiB limit, including chunked responses. A extended
+Jenkins redirect to HTTPS jenkins-static.example.com uses a separate,
+unauthenticated request. Success prints the byte count as JSON.
 
 `--stdout` requires `--download` and an explicit positive build number (or a
 build URL). It rejects `--output`, traversal/URL syntax, missing artifacts, and

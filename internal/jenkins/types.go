@@ -249,11 +249,23 @@ type Stage struct {
 	// Agent is the node the stage ran on. Only the PGV tree reports it; Blue
 	// Ocean's /nodes/ has no equivalent field, so an empty value means either
 	// "no node block" or "the fallback source cannot say".
-	Agent string `json:"agent,omitempty"`
-	// StartTimeMillis is only set from the PGV tree. Blue Ocean's startTime is
-	// left undecoded: its durationInMillis for a running node already runs up
-	// to the request. Excluded from JSON to keep output stable.
-	StartTimeMillis int64 `json:"-"`
+	Agent           string `json:"agent,omitempty"`
+	StartTimeMillis int64  `json:"-"` // PGV uses Unix milliseconds.
+	BlueStartTime   string `json:"startTime,omitempty"`
+	GraphIncomplete bool   `json:"-"`
+}
+
+// StartedAt returns the stage start in Unix milliseconds, or zero when unknown.
+func (s Stage) StartedAt() int64 {
+	if s.StartTimeMillis > 0 {
+		return s.StartTimeMillis
+	}
+	for _, layout := range []string{"2006-01-02T15:04:05-0700", time.RFC3339Nano} {
+		if t, err := time.Parse(layout, s.BlueStartTime); err == nil && t.UnixMilli() > 0 {
+			return t.UnixMilli()
+		}
+	}
+	return 0
 }
 
 // Elapsed returns the stage duration. PGV reports no duration for a running,

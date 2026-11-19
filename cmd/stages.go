@@ -36,12 +36,14 @@ func init() {
 // stageInfo is the JSON/output shape for a single stage, adding the computed
 // qualified path to the raw stage fields.
 type stageInfo struct {
-	ID             string `json:"id"`
-	Name           string `json:"name"`
-	Path           string `json:"path"`
-	Type           string `json:"type"`
-	Status         string `json:"status"`
-	DurationMillis int64  `json:"durationMillis"`
+	ID              string `json:"id"`
+	Name            string `json:"name"`
+	Path            string `json:"path"`
+	Type            string `json:"type"`
+	Status          string `json:"status"`
+	DurationMillis  int64  `json:"durationMillis"`
+	StartTimeMillis int64  `json:"startTimeMillis,omitempty"`
+	GraphIncomplete bool   `json:"graphIncomplete,omitempty"`
 	// ElapsedMillis is the time so far of a running, paused or queued stage.
 	// Absent once the stage has finished.
 	ElapsedMillis int64  `json:"elapsedMillis,omitempty"`
@@ -126,15 +128,17 @@ func runStages(cmd *cobra.Command, args []string) error {
 		elapsed := s.Elapsed(now)
 		running, _ := s.RunningElapsed(now)
 		infos[i] = stageInfo{
-			ID:             s.ID,
-			Name:           s.Name,
-			Path:           paths[s.ID],
-			Type:           s.Type,
-			Status:         s.Status,
-			DurationMillis: s.DurationMillis,
-			ElapsedMillis:  running.Milliseconds(),
-			elapsed:        elapsed,
-			Agent:          s.Agent,
+			ID:              s.ID,
+			Name:            s.Name,
+			Path:            paths[s.ID],
+			Type:            s.Type,
+			Status:          s.Status,
+			DurationMillis:  s.DurationMillis,
+			StartTimeMillis: s.StartedAt(),
+			GraphIncomplete: s.GraphIncomplete,
+			ElapsedMillis:   running.Milliseconds(),
+			elapsed:         elapsed,
+			Agent:           s.Agent,
 		}
 	}
 
