@@ -435,3 +435,9 @@ type CopyJobReceipt struct {
 	Accepted            bool   `json:"accepted"`
 	Verified            bool   `json:"verified"`
 }
+
+// SCMJobReceipt records a definite refusal or the verified single-job creation.
+type SCMJobReceipt struct {
+	Job   string `json:"job"`
+	State string `json:"state"`
+}

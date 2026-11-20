@@ -22,7 +22,10 @@ func init() {
 	copy := &cobra.Command{Use: "copy SOURCE DEST --json --expected-sha256 HASH", Short: "Create an absent job from approved exact XML once", Args: cobra.ExactArgs(2), RunE: runCopyJobConfig}
 	copy.Flags().String("expected-sha256", "", "Required SHA-256 of the approved exact source XML")
 	digest := &cobra.Command{Use: "digest JOB --json", Short: "Read exact and normalized configuration hashes", Args: cobra.ExactArgs(1), RunE: runDigestJobConfig}
-	command.AddCommand(get, update, copy, digest)
+	create := &cobra.Command{Use: "create-scm JOB --scm-branch BRANCH --script-path FILE --json", Short: "Create one standalone Pipeline from SCM", Args: cobra.ExactArgs(1), RunE: runCreateSCMJob}
+	create.Flags().String("scm-branch", "", "Literal CI repository branch")
+	create.Flags().String("script-path", "", "Pipeline script relative to repository root")
+	command.AddCommand(get, update, copy, digest, create)
 	rootCmd.AddCommand(command)
 }
 
@@ -129,6 +132,34 @@ func runCopyJobConfig(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("cannot load Jenkins credentials for job configuration")
 	}
 	receipt, err := client.CopyJobConfig(ctx, args[0], args[1], expected)
+	if err != nil {
+		return err
+	}
+	return json.NewEncoder(os.Stdout).Encode(receipt)
+}
+
+func runCreateSCMJob(cmd *cobra.Command, args []string) error {
+	isJSON, _ := cmd.Flags().GetBool("json")
+	verbose, _ := cmd.Flags().GetBool("verbose")
+	format, _ := cmd.Flags().GetString("format")
+	branchFlag, _ := cmd.Flags().GetString("branch")
+	if !isJSON || verbose || format != "" || branchFlag != "" {
+		return fmt.Errorf("job-config create-scm requires --json without --verbose, --format or --branch")
+	}
+	rawTimeout, _ := cmd.Flags().GetString("timeout")
+	timeout, err := time.ParseDuration(rawTimeout)
+	if err != nil || timeout <= 0 || timeout > 120*time.Second {
+		return fmt.Errorf("job-config timeout must be positive and at most 120s")
+	}
+	ctx, cancel := context.WithTimeout(cmd.Context(), timeout)
+	defer cancel()
+	client, _, err := clientFromCmd(cmd)
+	if err != nil {
+		return fmt.Errorf("cannot load Jenkins credentials for job configuration")
+	}
+	branch, _ := cmd.Flags().GetString("scm-branch")
+	script, _ := cmd.Flags().GetString("script-path")
+	receipt, err := client.CreateSCMJob(ctx, args[0], branch, script)
 	if err != nil {
 		return err
 	}

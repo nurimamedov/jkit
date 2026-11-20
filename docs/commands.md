@@ -2025,3 +2025,12 @@ no-symlink policy as login/status, including its backup and replacement.
 
 The no-agent informational note from `stages` appears only in human output;
 valid JSON/templates stay free of that diagnostic.
+
+### job-config create-scm
+
+`jkit job-config create-scm JOB --scm-branch BRANCH --script-path FILE --json`
+creates one standalone Pipeline from SCM inside an existing ALPHA or BETA folder.
+The root selects the product's CI repository and Jenkins credential. The response
+contains the job and state. Only `verified` confirms creation and SCM readback.
+A definite refusal also returns a structured state. A missing acknowledgement
+or failed readback requires inspecting the destination before another write.
