@@ -1945,7 +1945,7 @@ jkit completion powershell >> $PROFILE
 
 ## `jkit job-config`
 
-Read exact Jenkins job XML or submit one bounded replacement. These commands
+Read, compare or replace Jenkins job XML, copy a standalone job, or create a single Pipeline from SCM. These commands
 require an explicit natural job path; URLs and traversal syntax are rejected.
 
 ```sh
@@ -2012,6 +2012,30 @@ still returns exact stored bytes. A successful receipt proves the observed
 configuration at readback time, not its later state. COPY uses the same XML
 size, timeout and sensitive-output restrictions as GET and UPDATE.
 
+### job-config create-scm
+
+```sh
+jkit job-config create-scm JOB --scm-branch BRANCH --script-path FILE --json
+```
+
+The extended backend creates one standalone pipeline under an existing ALPHA or
+BETA folder. The product selects the CI repository and credential. It sets
+`refs/heads/BRANCH`, the repository-relative script path and lightweight checkout.
+The endpoint creates one item. It leaves builds and triggers untouched.
+
+A structured receipt contains `job` and `state`. Read the state even on exit 0.
+
+| State | Meaning |
+| --- | --- |
+| `verified` | Jenkins acknowledged the request and the saved SCM definition matched. |
+| `parent_unavailable` | The parent could not be verified as an accessible Jenkins folder. |
+| `destination_exists` | The exact job already exists. |
+| `destination_unavailable` | The client could not establish whether the destination was absent. |
+| `creation_rejected` | Jenkins returned HTTP 4xx to the create request. |
+
+A missing acknowledgement or failed readback returns an error. In product, use
+the saved `jx create-scm-job` operation to inspect the outcome before another write.
+
 ### Extended output safety
 
 The `0.10.1-ext.2` build masks secret-name and password input defaults and
@@ -2025,12 +2049,3 @@ no-symlink policy as login/status, including its backup and replacement.
 
 The no-agent informational note from `stages` appears only in human output;
 valid JSON/templates stay free of that diagnostic.
-
-### job-config create-scm
-
-`jkit job-config create-scm JOB --scm-branch BRANCH --script-path FILE --json`
-creates one standalone Pipeline from SCM inside an existing ALPHA or BETA folder.
-The root selects the product's CI repository and Jenkins credential. The response
-contains the job and state. Only `verified` confirms creation and SCM readback.
-A definite refusal also returns a structured state. A missing acknowledgement
-or failed readback requires inspecting the destination before another write.

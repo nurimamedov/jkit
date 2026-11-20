@@ -32,7 +32,9 @@ jkit api /api/json               # raw authenticated API request, like gh api
 
 ## Extended product build
 
-This branch supplies `0.10.1-ext.3` for the workspace `jx` wrapper. Read
+This branch supplies `0.10.1-ext.4` for the workspace `jx` wrapper. Use
+`jx create-scm-job` to register one Pipeline from SCM. Its backend protocol is
+documented under [job-config create-scm](docs/commands.md#job-config-create-scm). Read
 [build/pinning notes](docs/patch-build.md) before installing or upgrading it.
 The upstream installation commands below do not reproduce the measured
 extended backend. Codex and Claude Code start with [AGENTS.md](AGENTS.md)

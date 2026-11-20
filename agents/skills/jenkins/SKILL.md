@@ -504,6 +504,10 @@ Use an explicit natural job path and number for machine aborts:
 `submitted`, `alreadyCompleted`; independently read the numbered run to confirm
 it stopped. No latest inference or automatic mutation retry.
 
+For a new SCM pipeline in an existing product folder, use the workspace
+`jx create-scm-job` plan and retain its operation ID. The backend uses
+`job-config create-scm`. [Receipt states](../../../docs/commands.md#job-config-create-scm)
+
 To copy an approved standalone job, read `job-config digest SOURCE --json` first (exact `sha256` and normalized
 `configurationSha256`),
 then use `jkit job-config copy SOURCE DEST --json --expected-sha256 HASH`.

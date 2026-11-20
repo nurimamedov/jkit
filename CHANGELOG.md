@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## 0.10.1-ext.4 — 2026-11-20
+
+- Added `job-config create-scm` for registering a single product Pipeline from SCM, with a verified configuration receipt.
+
 ## [0.10.1] - 2026-10-15
 
 ### Changed

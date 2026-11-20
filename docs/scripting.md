@@ -74,6 +74,10 @@ any error, like other commands.
 `jkit export html` exits 0 when the file is written, even with unreadable logs,
 1 on a fatal error, and 130 when interrupted (Ctrl+C or SIGTERM).
 
+For extended `job-config create-scm --json`, exit 0 means a receipt was
+returned. Require `state == "verified"` to count a creation. A refusal such as
+`destination_exists` also has a receipt. [Receipt states](commands.md#job-config-create-scm)
+
 ## Non-Interactive Auth
 
 For CI pipelines, use flags and env vars to avoid prompts:
