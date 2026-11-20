@@ -5,16 +5,18 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/xml"
+	"io/fs"
 	"net/http"
 	"net/url"
 	"reflect"
 	"regexp"
 	"strings"
+	"unicode"
 
 	"github.com/ysmaoui/jkit/internal/jenkins"
 )
 
-var scmRelativePath = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]*(/[A-Za-z0-9_][A-Za-z0-9_.-]*)*$`)
+var scmBranchPath = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]*(/[A-Za-z0-9_][A-Za-z0-9_.-]*)*$`)
 
 type scmRemote struct {
 	URL         string `xml:"url"`
@@ -42,9 +44,9 @@ func (c *Client) CreateSCMJob(ctx context.Context, job, branch, script string) (
 	if err := ValidateConfigJob(job); err != nil || i < 0 || (product != "ALPHA" && product != "BETA") {
 		return nil, controlError("expected a job inside ALPHA or BETA")
 	}
-	if !scmRelativePath.MatchString(branch) || len(branch) > 255 || strings.Contains(branch, "..") ||
+	if !scmBranchPath.MatchString(branch) || len(branch) > 255 || strings.Contains(branch, "..") ||
 		strings.HasSuffix(branch, ".") || strings.HasSuffix(branch, ".lock") || strings.Contains(branch, ".lock/") ||
-		!scmRelativePath.MatchString(script) || len(script) > 1024 {
+		!fs.ValidPath(script) || script == "." || len(script) > 1024 || strings.ContainsAny(script, `\:`) || strings.ContainsFunc(script, unicode.IsControl) {
 		return nil, controlError("expected a literal Git branch and repository-relative script path")
 	}
 	product = strings.ToLower(product)
