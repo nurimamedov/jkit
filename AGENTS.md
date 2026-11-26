@@ -12,16 +12,16 @@ Guidance for AI coding agents working on this repo.
 
 ## Using Jenkins tooling
 
-Read [agents/README.md](agents/README.md) before operating Jenkins. In an product
-workspace use its `jx` wrapper first; read the jx agent guide there.
+Read [agents/README.md](agents/README.md) before operating Jenkins. Where the
+`jx` wrapper is installed, use it first and read its agent guide.
 This repository implements the lower-level `jkit` backend, with different JSON
 and exit semantics. `jkit run` corresponds to `jx build`; `jkit test` to `jx tests`.
 Direct backend writes do not inherit jx approvals or its durable journal.
 For jx diagnose/history and log selection flags, consult the installed shared
 guide; backend diagnose skips SUCCESS and backend history is a trend summary.
 
-For this extended branch read [docs/patch-build.md](docs/patch-build.md).
-Do not replace its measured backend with upstream `@latest` during jx setup.
+For this fork read [docs/patch-build.md](docs/patch-build.md).
+jx expects this fork's version; upstream `@latest` lacks the extensions it uses.
 Read `jkit COMMAND --help` and [docs/scripting.md](docs/scripting.md) for the
 actual version's flags and exit codes. Repository help needs no authentication.
 

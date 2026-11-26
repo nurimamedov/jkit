@@ -12,8 +12,8 @@ compares XML meaning across Jenkins serialization without altering exact reads
 or submitted source hashes.
 New upstream auth prune, input and inspect paths enforce the same private-file,
 masking and bounded XML policies.
-The third extended patch adds structured submission errors, bounded artifact downloads from the static host, and stage start and completeness fields.
-The fourth patch adds single-job Pipeline from SCM creation and verifies its persisted configuration.
+The third extended patch adds structured submission errors, bounded artifact downloads from a static host named in `JKIT_ARTIFACT_STATIC_HOST`, and stage start and completeness fields.
+The fourth patch adds single-job Pipeline from SCM creation for folders listed in `JKIT_SCM_ROOTS` and verifies its persisted configuration.
 The module path and upstream MIT license are retained.
 
 Changes and compatibility behavior are documented in [commands.md](commands.md).

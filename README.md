@@ -30,15 +30,28 @@ jkit open my-app                 # open in browser
 jkit api /api/json               # raw authenticated API request, like gh api
 ```
 
-## Extended product build
+## What this fork adds
 
-This branch supplies `0.10.1-ext.4` for the workspace `jx` wrapper. Use
-`jx create-scm-job` to register one Pipeline from SCM. Its backend protocol is
-documented under [job-config create-scm](docs/commands.md#job-config-create-scm). Read
-[build/pinning notes](docs/patch-build.md) before installing or upgrading it.
-The upstream installation commands below do not reproduce the measured
-extended backend. Codex and Claude Code start with [AGENTS.md](AGENTS.md)
-and [agent integration](agents/README.md).
+This fork (`0.10.1-ext.4`) is the backend of [jx](https://github.com/nurimamedov/jenkins-control),
+a wrapper that gives agents and scripts a stable JSON protocol for Jenkins. It keeps
+upstream behaviour and adds safety and evidence features that wrapper relies on:
+
+- strict same-origin authentication, private credential files and masked secrets in output;
+- correct test filtering and build comparison (`diff` fails instead of returning an empty result);
+- bounded queue receipts, artifact reads to stdout and file downloads with a 512 MiB limit;
+- exact-byte `job-config get/update`, SHA-256-preconditioned `copy-job` and explicit-number `abort`;
+- `job-config create-scm` for one standalone Pipeline from SCM with a verified configuration receipt;
+- structured submission errors and stage start/completeness fields.
+
+Two settings are read from the environment:
+
+| Variable | Purpose |
+| --- | --- |
+| `JKIT_ARTIFACT_STATIC_HOST` | HTTPS host that Jenkins may redirect artifact downloads to; the redirected request carries no credentials. Without it such redirects are refused. |
+| `JKIT_SCM_ROOTS` | JSON map from a top-level Jenkins folder to its CI repository and credential ID, used by `job-config create-scm`, e.g. `{"TEAM":{"url":"https://git.example.com/team/ci.git","credentials":"team-ci"}}`. |
+
+Build notes: [docs/patch-build.md](docs/patch-build.md). Agents start with
+[AGENTS.md](AGENTS.md) and [agent integration](agents/README.md).
 
 ## Install
 

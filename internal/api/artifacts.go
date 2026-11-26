@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"unicode"
 
@@ -118,9 +119,10 @@ func (c *Client) OpenArtifactFile(ctx context.Context, jobPath string, number in
 	case 301, 302, 303, 307, 308:
 		dest, locationErr := resp.Location()
 		resp.Body.Close()
-		static := httpOrigin{"https", "jenkins-static.example.com", 443}
-		origin := httpOrigin{"https", "jenkins.example.com", 443}
-		if locationErr != nil || !origin.allows(req.URL) || !static.allows(dest) {
+		// Some Jenkins installations redirect artifact downloads to a dedicated static host.
+		// Only that HTTPS host, named in JKIT_ARTIFACT_STATIC_HOST, may serve the file.
+		static := httpOrigin{"https", os.Getenv("JKIT_ARTIFACT_STATIC_HOST"), 443}
+		if locationErr != nil || req.URL.Scheme != "https" || !static.allows(dest) {
 			return nil, errOriginBoundary
 		}
 		req, err = http.NewRequestWithContext(ctx, http.MethodGet, dest.String(), nil)

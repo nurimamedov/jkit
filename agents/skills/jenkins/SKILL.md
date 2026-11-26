@@ -504,7 +504,7 @@ Use an explicit natural job path and number for machine aborts:
 `submitted`, `alreadyCompleted`; independently read the numbered run to confirm
 it stopped. No latest inference or automatic mutation retry.
 
-For a new SCM pipeline in an existing product folder, use the workspace
+For a new SCM pipeline in a folder listed in `JKIT_SCM_ROOTS`, use the
 `jx create-scm-job` plan and retain its operation ID. The backend uses
 `job-config create-scm`. [Receipt states](../../../docs/commands.md#job-config-create-scm)
 

@@ -1065,10 +1065,10 @@ jobs, makes one `createItem` POST, and verifies exact destination identity and
 normalized XML configuration (Jenkins reserializes the submitted bytes). It never overwrites an existing target or starts a build. HTTP uncertainty
 requires read-only reconciliation before further mutation.
 
-Version `0.10.1-ext.4` adds typed single-job creation. The target root selects
-the CI remote and credential. `job-config create-scm` checks the parent and
+Version `0.10.1-ext.4` adds typed single-job creation. The target root, looked up
+in `JKIT_SCM_ROOTS`, selects the CI remote and credential. `job-config create-scm` checks the parent and
 destination, submits the SCM definition once, and reads back its identity and
-configuration. The workspace wrapper owns planning, idempotency and recovery.
+configuration. The jx wrapper owns planning, idempotency and recovery.
 [Command and receipts](commands.md#job-config-create-scm)
 
 Machine aborts require an explicit natural job path and positive number. Their

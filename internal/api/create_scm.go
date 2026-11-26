@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/url"
+	"os"
 	"reflect"
 	"regexp"
 	"strings"
@@ -38,24 +39,40 @@ type pipelineSCM struct {
 	} `xml:"definition"`
 }
 
+// scmRoot is the repository and credential used for pipelines under one top-level folder.
+type scmRoot struct {
+	URL         string `json:"url"`
+	Credentials string `json:"credentials"`
+}
+
+// scmRoots reads JKIT_SCM_ROOTS, for example
+// {"TEAM":{"url":"https://git.example.com/team/ci.git","credentials":"team-ci"}}.
+func scmRoots() map[string]scmRoot {
+	var roots map[string]scmRoot
+	if json.Unmarshal([]byte(os.Getenv("JKIT_SCM_ROOTS")), &roots) != nil {
+		return nil
+	}
+	return roots
+}
+
 func (c *Client) CreateSCMJob(ctx context.Context, job, branch, script string) (*jenkins.SCMJobReceipt, error) {
-	product, _, _ := strings.Cut(job, "/")
+	top, _, _ := strings.Cut(job, "/")
 	i := strings.LastIndexByte(job, '/')
-	if err := ValidateConfigJob(job); err != nil || i < 0 || (product != "ALPHA" && product != "BETA") {
-		return nil, controlError("expected a job inside ALPHA or BETA")
+	root, ok := scmRoots()[top]
+	if err := ValidateConfigJob(job); err != nil || i < 0 || !ok || root.URL == "" || root.Credentials == "" {
+		return nil, controlError("expected a job inside a folder configured in JKIT_SCM_ROOTS")
 	}
 	if !scmBranchPath.MatchString(branch) || len(branch) > 255 || strings.Contains(branch, "..") ||
 		strings.HasSuffix(branch, ".") || strings.HasSuffix(branch, ".lock") || strings.Contains(branch, ".lock/") ||
 		!fs.ValidPath(script) || script == "." || len(script) > 1024 || strings.ContainsAny(script, `\:`) || strings.ContainsFunc(script, unicode.IsControl) {
 		return nil, controlError("expected a literal Git branch and repository-relative script path")
 	}
-	product = strings.ToLower(product)
 	var wanted pipelineSCM
 	wanted.XMLName.Local = "flow-definition"
 	wanted.Definition.Class = "org.jenkinsci.plugins.workflow.cps.CpsScmFlowDefinition"
 	git := &wanted.Definition.Git
 	git.Class = "hudson.plugins.git.GitSCM"
-	git.Remotes = []scmRemote{{"https://gitlab.example.com/products/" + product + "/" + product + "_ci.git", product + "_tech_user_username_with_password"}}
+	git.Remotes = []scmRemote{{root.URL, root.Credentials}}
 	git.Branches = []string{"refs/heads/" + branch}
 	wanted.Definition.Script = script
 	wanted.Definition.Lightweight = true

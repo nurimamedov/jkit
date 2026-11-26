@@ -14,12 +14,11 @@ imports those same instructions for Claude Code. Read this file and
 need no skill installation. Optional copied skills are not automatically
 kept in sync with this checkout.
 
-For product operations use the workspace **jx** wrapper first, and read its
-the jx agent guide. PATH `jx` is that
-launcher, not Jenkins X / JayeX; `jkit 0.10.1-ext.4` is its pinned Go backend.
+Where the **jx** wrapper is installed, use it first and read its agent guide.
+`jx` here is that wrapper, not Jenkins X; `jkit 0.10.1-ext.4` is its pinned Go backend.
 For a single Pipeline from SCM, use `jx create-scm-job` with a saved plan and a stable idempotency key.
-The [extended build notes](../docs/patch-build.md) describe the extensions.
-Upstream `go install ...@latest` does not provide that measured artifact.
+The [build notes](../docs/patch-build.md) describe the extensions.
+Upstream `go install ...@latest` does not include them.
 
 For direct jkit usage outside that workspace, start with local discovery:
 

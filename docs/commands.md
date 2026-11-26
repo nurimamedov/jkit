@@ -1393,9 +1393,9 @@ Defaults to the latest build. Without `-d`, lists artifacts as a table.
 
 `--download PATH --output-dir DIR` requires an explicit build and uses the
 exact artifact-relative path. It saves DIR/basename(PATH) with an atomic
-replacement and a 512 MiB limit, including chunked responses. A extended
-Jenkins redirect to HTTPS jenkins-static.example.com uses a separate,
-unauthenticated request. Success prints the byte count as JSON.
+replacement and a 512 MiB limit, including chunked responses. A Jenkins
+redirect to the HTTPS host named in `JKIT_ARTIFACT_STATIC_HOST` uses a separate,
+unauthenticated request; other redirects are refused. Success prints the byte count as JSON.
 
 `--stdout` requires `--download` and an explicit positive build number (or a
 build URL). It rejects `--output`, traversal/URL syntax, missing artifacts, and
@@ -2018,8 +2018,8 @@ size, timeout and sensitive-output restrictions as GET and UPDATE.
 jkit job-config create-scm JOB --scm-branch BRANCH --script-path FILE --json
 ```
 
-The extended backend creates one standalone pipeline under an existing ALPHA or
-BETA folder. The product selects the CI repository and credential. It sets
+The command creates one standalone pipeline under an existing top-level folder
+listed in `JKIT_SCM_ROOTS`. The folder selects the CI repository and credential. It sets
 `refs/heads/BRANCH`, the repository-relative script path and lightweight checkout.
 The endpoint creates one item. It leaves builds and triggers untouched.
 
@@ -2033,7 +2033,7 @@ A structured receipt contains `job` and `state`. Read the state even on exit 0.
 | `destination_unavailable` | The client could not establish whether the destination was absent. |
 | `creation_rejected` | Jenkins returned HTTP 4xx to the create request. |
 
-A missing acknowledgement or failed readback returns an error. In product, use
+A missing acknowledgement or failed readback returns an error. With jx, use
 the saved `jx create-scm-job` operation to inspect the outcome before another write.
 
 ### Extended output safety

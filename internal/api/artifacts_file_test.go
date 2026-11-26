@@ -18,6 +18,7 @@ func (f artifactTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 func TestArtifactStaticRedirectDropsCredentials(t *testing.T) {
 	const jenkins = "https://jenkins.example.com"
 	const static = "https://jenkins-static.example.com"
+	t.Setenv("JKIT_ARTIFACT_STATIC_HOST", "jenkins-static.example.com")
 	const name = "profile/x #1.tgz"
 	client := NewClient(jenkins, "tester", "fixture")
 	location := static + "/signed?token=example"
@@ -50,7 +51,11 @@ func TestArtifactStaticRedirectDropsCredentials(t *testing.T) {
 		_, err := client.OpenArtifactFile(context.Background(), "demo", 7, name)
 		require.ErrorIs(t, err, errOriginBoundary)
 	}
-	require.Equal(t, 5, first)
+	t.Setenv("JKIT_ARTIFACT_STATIC_HOST", "")
+	location = static + "/signed?token=example"
+	_, err = client.OpenArtifactFile(context.Background(), "demo", 7, name)
+	require.ErrorIs(t, err, errOriginBoundary)
+	require.Equal(t, 6, first)
 	require.Equal(t, 1, downloads)
 }
 

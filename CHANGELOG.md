@@ -6,7 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## 0.10.1-ext.4 — 2026-11-20
 
-- Added `job-config create-scm` for registering a single product Pipeline from SCM, with a verified configuration receipt.
+- Added `job-config create-scm` for registering a single Pipeline from SCM, with a verified configuration receipt. Folders, repositories and credentials come from `JKIT_SCM_ROOTS`.
+- Artifact downloads follow a redirect only to the host named in `JKIT_ARTIFACT_STATIC_HOST`.
 
 ## [0.10.1] - 2026-10-15
 
